@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { PLATFORM_FEATURES } from "@/features/marketing/site-content";
 import { MarketingIcon } from "@/components/marketing/MarketingIcon";

@@ -29,7 +29,7 @@ export function FAQSection({ embedded = false }: { embedded?: boolean }) {
             const isOpen = openIndex === i;
             return (
               <MotionReveal key={item.question} delay={i * 50}>
-                <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-[#F8FAFC]">
+                <div className="overflow-hidden rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] transition-all duration-200 hover:border-sky-200 hover:bg-white hover:shadow-sm">
                   <button
                     type="button"
                     onClick={() => setOpenIndex(isOpen ? null : i)}

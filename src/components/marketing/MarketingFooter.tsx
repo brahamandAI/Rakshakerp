@@ -50,7 +50,7 @@ export function MarketingFooter() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label={social.label}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 transition-colors hover:border-accent hover:text-accent"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 transition-all duration-200 hover:-translate-y-0.5 hover:border-accent hover:bg-white/10 hover:text-accent"
                   >
                     <Icon className="h-4 w-4" />
                   </a>
@@ -68,7 +68,7 @@ export function MarketingFooter() {
                 <button
                   type="button"
                   onClick={() => setSection("home")}
-                  className="text-sm text-white/70 transition-colors hover:text-white"
+                  className="text-sm text-white/70 transition-all duration-200 hover:translate-x-0.5 hover:text-white"
                 >
                   Home
                 </button>
@@ -78,24 +78,24 @@ export function MarketingFooter() {
                   <button
                     type="button"
                     onClick={() => setSection(link.id)}
-                    className="text-sm text-white/70 transition-colors hover:text-white"
+                    className="text-sm text-white/70 transition-all duration-200 hover:translate-x-0.5 hover:text-white"
                   >
                     {link.label}
                   </button>
                 </li>
               ))}
               <li>
-                <Link href="/login" className="text-sm text-white/70 transition-colors hover:text-white">
+                <Link href="/login" className="text-sm text-white/70 transition-all duration-200 hover:translate-x-0.5 hover:text-white">
                   Employee Login
                 </Link>
               </li>
               <li>
-                <Link href="/apply" className="text-sm text-white/70 transition-colors hover:text-white">
+                <Link href="/apply" className="text-sm text-white/70 transition-all duration-200 hover:translate-x-0.5 hover:text-white">
                   Employee Registration
                 </Link>
               </li>
               <li>
-                <Link href="/login" className="text-sm text-white/70 transition-colors hover:text-white">
+                <Link href="/login" className="text-sm text-white/70 transition-all duration-200 hover:translate-x-0.5 hover:text-white">
                   Application Status
                 </Link>
               </li>

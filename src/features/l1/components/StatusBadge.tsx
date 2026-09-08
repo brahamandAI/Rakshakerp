@@ -34,13 +34,13 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-none",
+        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-snug",
         STATUS_STYLES[status],
         className
       )}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80" aria-hidden />
-      <span className="truncate">{getRegistrationStatusLabel(status)}</span>
+      <span className="whitespace-normal">{getRegistrationStatusLabel(status)}</span>
     </span>
   );
 }

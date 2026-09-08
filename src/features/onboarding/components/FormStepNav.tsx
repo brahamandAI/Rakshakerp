@@ -57,7 +57,7 @@ export function FormStepNav({
         })}
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-3">
-        <p className="min-w-0 truncate text-[11px] font-medium text-[#64748B]">
+        <p className="min-w-0 text-[11px] font-medium leading-snug text-[#64748B]">
           Section {currentStep} of {ONBOARDING_TOTAL_STEPS}:{" "}
           <span className="text-[#0B1F3A]">
             {ONBOARDING_STEPS[currentStep - 1]?.label}

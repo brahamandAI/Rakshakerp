@@ -81,11 +81,11 @@ export function DashboardBreadcrumbs({
           <span key={crumb.href} className="inline-flex h-4 min-w-0 items-center gap-1">
             <ChevronRight className="h-3 w-3 shrink-0 text-[#CBD5E1]" />
             {isLast ? (
-              <span className="truncate font-semibold leading-none text-primary">{crumb.label}</span>
+              <span className="font-semibold leading-snug text-primary">{crumb.label}</span>
             ) : (
               <Link
                 href={crumb.href}
-                className="truncate rounded-md px-1 py-0.5 leading-none transition hover:bg-[#EFF6FF] hover:text-[#1D4ED8]"
+                className="rounded-md px-1 py-0.5 leading-snug transition hover:bg-[#EFF6FF] hover:text-[#1D4ED8]"
               >
                 {crumb.label}
               </Link>

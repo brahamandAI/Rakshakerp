@@ -42,7 +42,7 @@ export function MarketingNavbar() {
           href="/"
           variant="dark"
           priority
-          className="max-w-[240px] sm:max-w-[280px] lg:max-w-[340px]"
+          className="max-w-[240px] transition-transform duration-200 hover:scale-[1.02] sm:max-w-[280px] lg:max-w-[340px]"
           onClick={(e) => {
             if (isHomePage) {
               e.preventDefault();
@@ -58,10 +58,10 @@ export function MarketingNavbar() {
               type="button"
               onClick={() => handleSectionClick(item.id)}
               className={cn(
-                "rounded-full px-4 py-2 text-sm font-medium transition-colors duration-150",
+                "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200",
                 activeSection === item.id
                   ? "bg-primary text-white shadow-sm"
-                  : "text-[#475569] hover:bg-white hover:text-primary"
+                  : "text-[#475569] hover:-translate-y-px hover:bg-white hover:text-primary hover:shadow-sm"
               )}
             >
               {item.label}
@@ -70,7 +70,7 @@ export function MarketingNavbar() {
         </nav>
 
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
-          <StaffSignInButton />
+          <StaffSignInButton variant="default" />
           <Button
             variant="outline"
             size="sm"
@@ -82,7 +82,7 @@ export function MarketingNavbar() {
 
         <button
           type="button"
-          className="rounded-md p-2 text-[#1E293B] lg:hidden"
+          className="rounded-md p-2 text-[#1E293B] transition-colors hover:bg-[#F8FAFC] lg:hidden"
           onClick={() => setMobileOpen((open) => !open)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >

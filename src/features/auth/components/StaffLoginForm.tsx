@@ -72,7 +72,7 @@ export function StaffLoginForm({
       <Button
         type="submit"
         variant="default"
-        className="mt-7 h-12 w-full text-[0.95rem] shadow-lg shadow-[#0B1F3A]/20 hover:shadow-xl hover:shadow-[#0B1F3A]/25"
+        className="mt-7 h-12 w-full text-[0.95rem] shadow-lg shadow-[#0B1F3A]/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-[#0B1F3A]/25"
         isLoading={isLoading}
       >
         {isLoading ? "Signing in…" : "Sign In"}

@@ -142,7 +142,7 @@ export function DashboardStatCard({
         )}
       />
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#64748B]">
+        <p className="min-w-0 text-[11px] font-semibold uppercase leading-snug tracking-[0.14em] text-[#64748B]">
           {title}
         </p>
         {Icon && (
@@ -161,7 +161,7 @@ export function DashboardStatCard({
         {value}
       </p>
       {(hint || description) && (
-        <p className="mt-1.5 text-xs text-[#94A3B8]">{description ?? hint}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-[#94A3B8]">{description ?? hint}</p>
       )}
       {href && (
         <span className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#1D4ED8] transition group-hover:gap-2">
@@ -173,7 +173,7 @@ export function DashboardStatCard({
   );
 
   const cardClass = cn(
-    "group relative overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:border-[#BFDBFE]",
+    "group relative overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-1 hover:border-sky-300 hover:shadow-[0_16px_36px_-20px_rgba(14,165,233,0.45)]",
     className
   );
 

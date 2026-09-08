@@ -30,6 +30,11 @@
 
   body {
     @apply bg-[#F4F7FB] text-[#0F172A] antialiased;
+    overflow-wrap: break-word;
+  }
+
+  h1, h2, h3, h4 {
+    text-wrap: balance;
   }
 
   html {
@@ -38,7 +43,7 @@
 
   a,
   button {
-    @apply transition-colors duration-200 ease-out;
+    @apply transition-all duration-200 ease-out;
   }
 
   input:not([type="checkbox"]):not([type="radio"]),
@@ -56,11 +61,11 @@
 
 @layer components {
   .ui-card {
-    @apply rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+    @apply rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200;
   }
 
   .ui-card:hover {
-    @apply border-[#D5DEE8];
+    @apply border-sky-200/80 shadow-[0_12px_28px_-18px_rgba(14,165,233,0.35)];
   }
 
   .ui-soft-panel {
@@ -92,7 +97,7 @@
   }
 
   .dashboard-panel {
-    @apply rounded-2xl border border-[#E2E8F0]/90 bg-white/90 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur-sm sm:p-6;
+    @apply rounded-2xl border border-[#E2E8F0]/90 bg-white/90 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] backdrop-blur-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200/70 hover:shadow-[0_14px_32px_-20px_rgba(11,31,58,0.28)] sm:p-6;
   }
 
   .dashboard-form-panel {
@@ -109,6 +114,10 @@
 
   .enterprise-table td {
     @apply px-4 py-3.5 text-sm;
+  }
+
+  .enterprise-table tbody tr {
+    @apply transition-colors duration-150 hover:bg-[#F8FAFC];
   }
 }
 
@@ -211,4 +220,22 @@
   100% {
     background-position: -200% 0;
   }
+}
+
+@keyframes authOrb {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(18px, -14px) scale(1.08);
+  }
+}
+
+.animate-auth-orb {
+  animation: authOrb 9s ease-in-out infinite;
+}
+
+.animate-auth-orb-slow {
+  animation: authOrb 12s ease-in-out infinite reverse;
 }

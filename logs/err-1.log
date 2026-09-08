@@ -81,3 +81,4 @@
 2026-09-08T05:57:58:     at async k (.next/server/app/api/employee-documents-folder/[employeeId]/route.js:1:5408)
 2026-09-08T05:57:58:     at async g (.next/server/app/api/employee-documents-folder/[employeeId]/route.js:1:6411)
 2026-09-08T05:57:58:     at async E (.next/server/app/api/employee-documents-folder/[employeeId]/route.js:1:7533)
+2026-09-08T06:59:58:  ⨯ upstream image response failed for https://images.unsplash.com/photo-1557597774-9d273622cd0d?auto=format&fit=crop&w=1920&q=80 404

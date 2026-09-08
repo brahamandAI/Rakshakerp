@@ -229,7 +229,7 @@ export function ApplicationTable({
             {list.rows.map((app) => (
               <article
                 key={app._id}
-                className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm"
+                className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

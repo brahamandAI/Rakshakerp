@@ -18,30 +18,28 @@ interface RakshakBrandMarkProps {
 
 const variantStyles: Record<
   BrandVariant,
-  { wrapper: string; image: string; src: string }
+  { wrapper: string; image: string; src: string; width: number; height: number }
 > = {
-  /** White / light headers (marketing nav, auth, employee portal) */
   dark: {
     wrapper: "",
-    image: "max-h-12 sm:max-h-14 lg:max-h-[4.25rem] object-center",
+    image: "max-h-11 sm:max-h-[3.25rem] lg:max-h-14",
     src: RAKSHAK_LOGO_SRC,
+    width: 1024,
+    height: 379,
   },
-  /**
-   * Dark navy sidebar — transparent PNG sits directly on navy.
-   * Soft lift so maroon / cyan lockup stays crisp (no black plate).
-   */
   sidebar: {
     wrapper: "",
-    image:
-      "max-h-[54px] sm:max-h-[60px] brightness-[1.1] contrast-[1.06] drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]",
+    image: "h-auto max-h-[68px] w-auto max-w-full",
     src: RAKSHAK_LOGO_SIDEBAR_SRC,
+    width: 940,
+    height: 265,
   },
-  /** Dark footer / on-primary backgrounds */
   light: {
-    wrapper: "px-0.5 py-1.5",
-    image:
-      "max-h-14 sm:max-h-16 brightness-110 drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]",
+    wrapper: "px-0.5 py-1",
+    image: "max-h-12 sm:max-h-14",
     src: RAKSHAK_LOGO_SIDEBAR_SRC,
+    width: 940,
+    height: 265,
   },
 };
 
@@ -55,22 +53,37 @@ export function RakshakBrandMark({
   return (
     <div
       className={cn(
-        "relative inline-flex w-full max-w-full items-center",
+        "relative inline-flex max-w-full items-center",
         styles.wrapper,
         className
       )}
     >
-      <Image
-        src={styles.src}
-        alt={RAKSHAK_LOGO_ALT}
-        width={variant === "sidebar" ? 940 : 640}
-        height={variant === "sidebar" ? 265 : 140}
-        priority={priority || variant === "sidebar"}
-        className={cn(
-          "h-auto w-full object-contain object-left",
-          styles.image
-        )}
-      />
+      {variant === "sidebar" ? (
+        // Native img avoids extra scaling passes that soften the lockup on dark chrome.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={styles.src}
+          alt={RAKSHAK_LOGO_ALT}
+          width={styles.width}
+          height={styles.height}
+          className={cn("object-contain object-left", styles.image)}
+        />
+      ) : (
+        <Image
+          src={styles.src}
+          alt={RAKSHAK_LOGO_ALT}
+          width={styles.width}
+          height={styles.height}
+          quality={100}
+          unoptimized
+          priority={priority}
+          sizes="(max-width: 640px) 240px, (max-width: 1024px) 300px, 360px"
+          className={cn(
+            "h-auto w-auto max-w-full object-contain object-left",
+            styles.image
+          )}
+        />
+      )}
     </div>
   );
 }

@@ -11,11 +11,11 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
-  RECRUITMENT_STEPS,
   REQUIRED_DOCUMENTS,
 } from "@/features/marketing/site-content";
 import { MarketingIcon } from "@/components/marketing/MarketingIcon";
 import { Button } from "@/components/ui/button";
+import { StaffWorkflowCard } from "@/components/marketing/home/StaffWorkflowCard";
 
 const FORM_STEPS = [
   { step: 1, title: "Applicant Details", detail: "Branch, client, personal & contact information" },
@@ -38,7 +38,7 @@ const KEY_POINTS = [
 
 export function HomeApplicationOverview() {
   return (
-    <section className="relative bg-[#F4F7FB] py-16 lg:py-24">
+    <section id="how-it-works" className="relative scroll-mt-24 bg-[#F4F7FB] py-16 lg:py-24">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white to-transparent" />
       <div className="relative mx-auto max-w-7xl px-4 lg:px-8">
         <div className="text-center">
@@ -54,48 +54,8 @@ export function HomeApplicationOverview() {
           </p>
         </div>
 
-        <div className="mt-12 hidden lg:block">
-          <div className="relative">
-            <div className="absolute left-[6%] right-[6%] top-9 h-0.5 bg-gradient-to-r from-sky-200 via-accent/50 to-teal-200" />
-            <div className="grid grid-cols-6 gap-3">
-              {RECRUITMENT_STEPS.map((step, index) => (
-                <motion.div
-                  key={step.step}
-                  initial={{ opacity: 0, y: 18 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.07 }}
-                  className="relative flex flex-col items-center text-center"
-                >
-                  <div className="relative z-10 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl border border-sky-100 bg-white shadow-soft">
-                    <MarketingIcon name={step.icon} className="h-6 w-6 text-[#0EA5E9]" />
-                    <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-accent">
-                      {step.step}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm font-semibold text-primary">{step.title}</p>
-                  <p className="mt-1 text-[11px] leading-snug text-[#64748B]">{step.description}</p>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 space-y-3 lg:hidden">
-          {RECRUITMENT_STEPS.map((step) => (
-            <div
-              key={step.step}
-              className="flex gap-4 rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-sm font-bold text-accent">
-                {step.step}
-              </div>
-              <div>
-                <p className="font-semibold text-primary">{step.title}</p>
-                <p className="mt-0.5 text-sm text-[#64748B]">{step.description}</p>
-              </div>
-            </div>
-          ))}
+        <div className="mt-12">
+          <StaffWorkflowCard />
         </div>
 
         <div className="mt-16 grid gap-6 lg:grid-cols-2">

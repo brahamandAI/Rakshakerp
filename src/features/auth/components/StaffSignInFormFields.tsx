@@ -29,7 +29,7 @@ function emailPlaceholder(role: string): string {
 }
 
 const fieldControlClass =
-  "h-12 rounded-xl border-[#D8E0EA] bg-[#F8FAFC] text-[0.9375rem] text-[#0F172A] shadow-none placeholder:text-[#94A3B8] hover:border-[#C5D0DE] focus-visible:border-sky-400 focus-visible:bg-white focus-visible:ring-sky-400/30";
+  "h-12 rounded-xl border-[#D8E0EA] bg-[#F8FAFC] text-[0.9375rem] text-[#0F172A] shadow-none placeholder:text-[#94A3B8] transition-all duration-200 hover:border-[#C5D0DE] hover:bg-white focus-visible:border-sky-400 focus-visible:bg-white focus-visible:ring-sky-400/30";
 
 export function StaffSignInFormFields({
   idPrefix = "",
@@ -104,7 +104,7 @@ export function StaffSignInFormFields({
           {showForgotPassword && (
             <Link
               href="/staff/forgot-password"
-              className="text-xs font-semibold text-[#0284C7] transition hover:text-[#0369A1] hover:underline"
+              className="text-xs font-semibold text-[#0284C7] transition-all duration-200 hover:text-[#0369A1] hover:underline"
             >
               Forgot password?
             </Link>
@@ -124,7 +124,7 @@ export function StaffSignInFormFields({
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#64748B] transition hover:bg-[#E2E8F0]/70 hover:text-[#0B1F3A]"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#64748B] transition-all duration-200 hover:bg-[#E2E8F0]/70 hover:text-[#0B1F3A]"
             aria-label={showPassword ? "Hide password" : "Show password"}
             tabIndex={-1}
           >

@@ -27,7 +27,7 @@ export function ApplicationInfoSidebar({ data }: ApplicationInfoSidebarProps) {
 
   return (
     <aside className="flex h-full flex-col bg-primary text-white">
-      <div className="border-b border-white/10 px-5 py-5">
+      <div className="border-b border-white/10 bg-black px-3 py-3">
         <BrandLogo href="/application" variant="sidebar" />
       </div>
 

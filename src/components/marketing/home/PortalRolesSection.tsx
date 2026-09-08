@@ -22,9 +22,9 @@ export function PortalRolesSection() {
           <h2 className="mt-3 font-heading text-3xl font-bold text-white md:text-4xl">
             Built for every role in the workflow
           </h2>
-          <p className="mt-4 text-white/70">
+          <p className="mt-4 text-white/80">
             Each role gets a focused dashboard — queues, actions, Excel exports, and document
-            folders that match their permissions.
+            folders that match their permissions. Staff sign in once from a single login page.
           </p>
         </div>
 
@@ -48,21 +48,20 @@ export function PortalRolesSection() {
                 <MarketingIcon name={portal.icon} className="h-5 w-5" />
               </div>
               <h3 className="mt-4 font-heading font-semibold text-white">{portal.role}</h3>
-              <p className="mt-2 flex-1 text-sm leading-relaxed text-white/65">
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-white/75">
                 {portal.description}
               </p>
-              <Link href={portal.href} className="mt-5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full border-white/20 bg-white/5 text-white hover:bg-white/15"
-                >
-                  {portal.cta}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
             </motion.div>
           ))}
+        </div>
+
+        <div className="mt-10 flex justify-center">
+          <Link href="/staff/login">
+            <Button variant="accent" size="lg" className="gap-2">
+              Staff Login
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
         </div>
       </div>
     </section>

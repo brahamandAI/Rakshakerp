@@ -82,7 +82,7 @@ function DashboardHeader({
                 setCollapsed(!collapsed);
               }
             }}
-            className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#475569] transition hover:border-sky-200 hover:bg-[#EFF6FF] hover:text-[#1D4ED8]"
+            className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#E2E8F0] bg-white text-[#475569] transition-all duration-200 hover:-translate-y-px hover:border-sky-200 hover:bg-[#EFF6FF] hover:text-[#1D4ED8] hover:shadow-sm"
             aria-label={desktopCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <PanelLeft className="h-4 w-4" />
@@ -94,7 +94,7 @@ function DashboardHeader({
           />
           <div className="hidden min-w-0 lg:block">
             <div className="flex h-9 flex-wrap items-center gap-2">
-              <h1 className="truncate font-heading text-base font-semibold leading-none text-primary">
+              <h1 className="font-heading text-base font-semibold leading-snug text-primary">
                 {pageTitle}
               </h1>
               <span className="inline-flex h-5 items-center rounded-full border border-[#E2E8F0] bg-[#F8FAFC] px-2 text-[10px] font-semibold uppercase leading-none tracking-wide text-[#64748B]">
@@ -120,7 +120,7 @@ function DashboardHeader({
         </div>
       </div>
       <div className="border-t border-[#F1F5F9] px-4 py-2 lg:hidden">
-        <p className="mb-1 font-heading text-sm font-semibold text-primary">{pageTitle}</p>
+        <p className="mb-1 font-heading text-sm font-semibold leading-snug text-primary">{pageTitle}</p>
         <DashboardBreadcrumbs homeHref={homeHref} />
       </div>
     </header>
@@ -144,7 +144,7 @@ export function DashboardFrame(props: DashboardFrameProps) {
             {...headerProps}
           />
           <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+            <div className="mx-auto w-full min-w-0 max-w-7xl animate-fade-in">{children}</div>
           </main>
         </div>
       </div>

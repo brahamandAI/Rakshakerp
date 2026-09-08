@@ -230,10 +230,10 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
       <aside
         className={cn(
           "relative z-50 flex h-full shrink-0 flex-col overflow-hidden text-white",
-          "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:w-[17rem] max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-300",
+          "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:w-[18rem] max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-300",
           collapsed ? "max-lg:-translate-x-full" : "max-lg:translate-x-0",
           "lg:static lg:translate-x-0 lg:transition-[width] lg:duration-200",
-          desktopCollapsed ? "lg:w-[4.85rem]" : "lg:w-[17rem]"
+          desktopCollapsed ? "lg:w-[5rem]" : "lg:w-[18rem]"
         )}
       >
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#050D18] via-[#0A1A32] to-[#0E2748]" />
@@ -250,8 +250,8 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
             href={dashboardHome}
             onClick={handleNavClick}
             className={cn(
-              "flex items-center rounded-xl bg-white/[0.06] ring-1 ring-inset ring-white/[0.1] transition-colors hover:bg-white/[0.1]",
-              desktopCollapsed ? "justify-center px-1.5 py-2" : "px-2.5 py-2.5"
+              "relative z-10 flex items-center overflow-hidden rounded-xl bg-black",
+              desktopCollapsed ? "justify-center px-1 py-2" : "px-2 py-2"
             )}
             aria-label="Rakshak Enrollment Portal home"
             title="Rakshak Enrollment Portal"
@@ -260,7 +260,7 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
               href={null}
               variant="sidebar"
               priority
-              className={desktopCollapsed ? "max-w-[52px]" : "max-w-[240px]"}
+              className={desktopCollapsed ? "max-w-[56px]" : "w-full max-w-[252px]"}
             />
           </Link>
 
@@ -292,7 +292,7 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
 
         <nav
           className={cn(
-            "relative min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain py-4 scrollbar-none",
+            "relative z-10 min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain py-4 scrollbar-none",
             desktopCollapsed ? "px-2" : "px-3"
           )}
         >
@@ -307,10 +307,10 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
                 >
                   <Compass className="h-3 w-3 text-white/35" />
                   <p
-                    className={cn(
-                      "text-[10px] font-semibold uppercase tracking-[0.2em] text-white/40",
-                      desktopCollapsed && "lg:hidden"
-                    )}
+                      className={cn(
+                        "text-[11px] font-semibold uppercase tracking-[0.16em] text-white/80",
+                        desktopCollapsed && "lg:hidden"
+                      )}
                   >
                     {section.title}
                   </p>
@@ -331,11 +331,11 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
                       onFocus={() => prefetchNavItem(item.href)}
                       title={item.label}
                       className={cn(
-                        "group relative flex h-11 items-center gap-3 rounded-xl text-sm transition-colors duration-150",
+                        "group relative z-10 flex min-h-11 items-center gap-3 rounded-xl py-2 text-[13px] font-semibold transition-colors duration-150",
                         desktopCollapsed ? "px-3 lg:justify-center lg:px-0" : "px-3",
                         isActive
-                          ? "bg-white/[0.14] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
-                          : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                          ? "bg-white/[0.16] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)]"
+                          : "text-white hover:bg-white/[0.1]"
                       )}
                     >
                       {isActive && (
@@ -351,14 +351,14 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
                           "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition duration-200",
                           isActive
                             ? "bg-accent/20 text-accent"
-                            : "bg-white/5 text-white/75 group-hover:bg-white/10 group-hover:text-white"
+                            : "bg-white/10 text-white group-hover:bg-white/15"
                         )}
                       >
                         <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
                       </span>
                       <span
                         className={cn(
-                          "truncate font-medium tracking-tight",
+                          "min-w-0 flex-1 whitespace-normal break-words leading-snug text-white",
                           desktopCollapsed && "lg:hidden"
                         )}
                       >

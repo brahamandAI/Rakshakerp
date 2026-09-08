@@ -24,7 +24,7 @@ export function ContactInfoCards() {
       <div className="mx-auto max-w-7xl px-4 lg:px-8">
         <div className="grid gap-6 lg:grid-cols-3">
           <MotionReveal delay={0}>
-            <article className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm transition-shadow hover:shadow-md lg:p-8">
+            <article className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg lg:p-8">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/5 text-primary">
                 <MapPin className="h-6 w-6 text-accent" aria-hidden />
               </div>
@@ -53,7 +53,7 @@ export function ContactInfoCards() {
           </MotionReveal>
 
           <MotionReveal delay={60}>
-            <article className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm transition-shadow hover:shadow-md lg:p-8">
+            <article className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg lg:p-8">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/5 text-primary">
                 <Phone className="h-6 w-6 text-accent" aria-hidden />
               </div>
@@ -128,7 +128,7 @@ export function ContactInfoCards() {
           </MotionReveal>
 
           <MotionReveal delay={120}>
-            <article className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm transition-shadow hover:shadow-md lg:p-8">
+            <article className="flex h-full flex-col rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg lg:p-8">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/5 text-primary">
                 <Clock className="h-6 w-6 text-accent" aria-hidden />
               </div>

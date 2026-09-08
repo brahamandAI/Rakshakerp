@@ -38,8 +38,10 @@ export function PoweredByRobustrix({
         <Image
           src={isDark ? POWERED_BY.markLightSrc : POWERED_BY.markSrc}
           alt=""
-          width={20}
-          height={20}
+          width={40}
+          height={40}
+          quality={100}
+          unoptimized
           className="h-[18px] w-[18px] object-contain"
         />
       </span>

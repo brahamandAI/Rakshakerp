@@ -62,7 +62,7 @@ export function AboutSection({ embedded = false }: { embedded?: boolean }) {
 
           <div className="grid gap-8 lg:grid-cols-3">
             <MotionReveal delay={60} className="lg:col-span-1">
-              <div className="h-full rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-sm">
+              <div className="h-full rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/5 text-primary">
                   <Building2 className="h-6 w-6" />
                 </div>
@@ -74,7 +74,7 @@ export function AboutSection({ embedded = false }: { embedded?: boolean }) {
             </MotionReveal>
 
             <MotionReveal delay={100} className="lg:col-span-1">
-              <div className="h-full rounded-2xl border border-primary/15 bg-gradient-to-br from-primary to-[#0a1f38] p-8 text-white shadow-lg">
+              <div className="h-full rounded-2xl border border-primary/15 bg-gradient-to-br from-primary to-[#0a1f38] p-8 text-white shadow-lg transition-all duration-200 hover:-translate-y-1 hover:shadow-xl">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
                   <Target className="h-6 w-6 text-accent" />
                 </div>
@@ -88,7 +88,7 @@ export function AboutSection({ embedded = false }: { embedded?: boolean }) {
             </MotionReveal>
 
             <MotionReveal delay={140} className="lg:col-span-1">
-              <div className="h-full rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-sm">
+              <div className="h-full rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 text-accent">
                   <Eye className="h-6 w-6" />
                 </div>
@@ -144,7 +144,7 @@ export function AboutSection({ embedded = false }: { embedded?: boolean }) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ABOUT_CONTENT.objectives.map((objective, i) => (
               <MotionReveal key={objective} delay={i * 40}>
-                <div className="flex h-full items-start gap-3 rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
+                <div className="flex h-full items-start gap-3 rounded-xl border border-[#E2E8F0] bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
                     {i + 1}
                   </span>

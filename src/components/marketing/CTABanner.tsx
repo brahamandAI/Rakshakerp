@@ -12,15 +12,17 @@ interface CTABannerProps {
 }
 
 export function CTABanner({
-  title = "Ready to Secure Your Premises?",
-  description = "Speak with our security consultants for a customized protection plan tailored to your facility.",
-  primaryHref = "/contact",
-  primaryLabel = "Contact Us",
-  secondaryHref = "/apply",
-  secondaryLabel = "Employee Registration",
+  title = "Ready to continue onboarding?",
+  description = "Sign in to register employees, review applications, and manage document folders from your role dashboard.",
+  primaryHref = "/staff/login",
+  primaryLabel = "Staff Login",
+  secondaryHref = "/?section=contact",
+  secondaryLabel = "Contact Us",
 }: CTABannerProps) {
   return (
     <section className="relative overflow-hidden bg-primary py-20">
+      <div className="pointer-events-none absolute -left-16 top-0 h-48 w-48 animate-float rounded-full bg-sky-400/15 blur-3xl" />
+      <div className="pointer-events-none absolute -right-10 bottom-0 h-56 w-56 animate-float rounded-full bg-accent/20 blur-3xl [animation-delay:1.4s]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(201,162,39,0.15)_0%,_transparent_60%)]" />
       <div className="relative mx-auto max-w-4xl px-4 text-center lg:px-8">
         <h2 className="font-heading text-3xl font-bold text-white md:text-4xl">
@@ -36,9 +38,9 @@ export function CTABanner({
           </Link>
           <Link href={secondaryHref}>
             <Button
-              variant="outline"
+              variant="secondary"
               size="lg"
-              className="border-white/30 text-white hover:bg-white/10"
+              className="border-white/30 bg-white text-primary hover:bg-sky-50"
             >
               {secondaryLabel}
             </Button>

@@ -37,7 +37,7 @@ export function BrandLogo({
     <Link
       href={href}
       onClick={onClick}
-      className={cn("inline-flex w-full max-w-[320px] shrink-0 items-center lg:max-w-[360px]", className)}
+      className={cn("inline-flex max-w-[320px] shrink-0 items-center lg:max-w-[360px]", className)}
     >
       {mark}
     </Link>
