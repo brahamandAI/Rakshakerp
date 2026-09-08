@@ -49,7 +49,7 @@ export function ApplicationTable({
     applications,
     (app) => app.status,
     (app) =>
-      [app.applicationRef, app.fullName, app.postAppliedFor, app.employeeId, app.submittedByName]
+      [app.applicationRef, app.fullName, app.postAppliedFor, app.employeeId, app.submittedByName, app.submittedByEmail]
         .filter(Boolean)
         .join(" "),
     (app) => app.submittedAt ?? app.l1ApprovedAt,
@@ -191,8 +191,21 @@ export function ApplicationTable({
                         )}
                       </td>
                     ) : (
-                      <td className="whitespace-nowrap px-4 py-3.5 align-middle text-[#64748B]">
-                        {app.submittedByName ?? "—"}
+                      <td className="px-4 py-3.5 align-middle text-[#64748B]">
+                        {app.submittedByName || app.submittedByEmail ? (
+                          <>
+                            <span className="block font-medium text-[#0F172A]">
+                              {app.submittedByName ?? "—"}
+                            </span>
+                            {app.submittedByEmail && (
+                              <span className="block text-xs text-[#64748B]">
+                                {app.submittedByEmail}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     )}
                     {showEmployeeId && (

@@ -14,6 +14,7 @@ import {
 import { EmployeeStatus } from "@/types/enums";
 import { DOCUMENT_LABELS, DocumentType } from "@/features/onboarding/constants";
 import mongoose from "mongoose";
+import { resolveSubmittedBy } from "@/lib/services/submitter-snapshot";
 
 export type ExportScope = "l1" | "l2" | "admin";
 
@@ -57,7 +58,7 @@ function mapLeanToExport(
     documentUrls: docs?.urls,
     documentsFolderName: folder.folderName as string | undefined,
     documentsFolderPath: folder.folderPath as string | undefined,
-    submittedBy: emp.submittedBy as { name?: string; email?: string } | null,
+    submittedBy: resolveSubmittedBy(emp),
     l1Decision: emp.l1Decision as RegistrationExportSource["l1Decision"],
     l2Decision: emp.l2Decision as RegistrationExportSource["l2Decision"],
   };

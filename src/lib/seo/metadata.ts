@@ -44,6 +44,7 @@ export function organizationJsonLd() {
       streetAddress: SITE.address,
       addressCountry: "IN",
     },
+    logo: `${SITE.url}/brand/icon-512.png`,
     sameAs: [],
   };
   if (SITE.founded) {

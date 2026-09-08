@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApprovalStatusTimeline } from "@/features/submitter/components/ApprovalStatusTimeline";
 import type { ApprovalTimelineItem } from "@/features/submitter/components/ApprovalStatusTimeline";
+import { ApprovalTimeline } from "@/components/dashboard/ApprovalTimeline";
 import { EmployeeDocumentsFolderPanel } from "@/features/documents/components/EmployeeDocumentsFolderPanel";
 import { StatusBadge } from "@/features/l1/components/StatusBadge";
 import { EmployeeStatus } from "@/types/enums";
@@ -25,6 +26,7 @@ interface RegistrationDetailReadOnlyProps {
     gunman?: Record<string, unknown>;
     rejectionReason?: string;
     correctionNotes?: string;
+    submittedBy?: { name?: string; email?: string } | null;
   };
   documents: Array<{ documentType: string; fileName: string; url: string }>;
   history?: ApprovalTimelineItem[];
@@ -62,12 +64,14 @@ export function RegistrationDetailReadOnly({
   history = [],
   showDocumentsFolder = false,
 }: RegistrationDetailReadOnlyProps) {
+  const statusValue = (
+    Object.values(EmployeeStatus) as string[]
+  ).includes(employee.status)
+    ? (employee.status as EmployeeStatus)
+    : EmployeeStatus.SUBMITTED;
+
   return (
     <div className="space-y-4 animate-fade-in">
-      {history.length > 0 && (
-        <ApprovalStatusTimeline history={history} currentStatus={employee.status} />
-      )}
-
       {showDocumentsFolder && employeeId && (
         <EmployeeDocumentsFolderPanel employeeId={employeeId} />
       )}
@@ -78,19 +82,28 @@ export function RegistrationDetailReadOnly({
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge
-              status={
-                (Object.values(EmployeeStatus) as string[]).includes(employee.status)
-                  ? (employee.status as EmployeeStatus)
-                  : EmployeeStatus.SUBMITTED
-              }
-            />
+            <StatusBadge status={statusValue} />
             {employee.temporaryEmployeeId && (
               <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-mono text-xs font-semibold text-emerald-800">
                 Temp ID: {employee.temporaryEmployeeId}
               </span>
             )}
           </div>
+          <ApprovalTimeline status={statusValue} />
+          {(employee.submittedBy?.name || employee.submittedBy?.email) && (
+            <p className="text-xs text-[#475569]">
+              Submitted by{" "}
+              <span className="font-semibold text-[#0F172A]">
+                {employee.submittedBy.name ?? "Registration Submitter"}
+              </span>
+              {employee.submittedBy.email ? (
+                <span className="text-[#64748B]"> ({employee.submittedBy.email})</span>
+              ) : null}
+            </p>
+          )}
+          {history.length > 0 && (
+            <ApprovalStatusTimeline history={history} currentStatus={employee.status} />
+          )}
           <p>
             <span className="font-medium text-[#64748B]">Application Ref:</span>{" "}
             <span className="font-semibold text-primary">{employee.applicationRef}</span>

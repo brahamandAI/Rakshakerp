@@ -12,7 +12,7 @@ import {
   PreviewDocument,
 } from "@/features/documents/components/DocumentPreviewGrid";
 import { EmployeeStatus } from "@/types/enums";
-import { Pencil, History, Undo2 } from "lucide-react";
+import { Pencil, Undo2 } from "lucide-react";
 import Link from "next/link";
 
 interface HistoryItem {
@@ -162,6 +162,40 @@ export function EmployeeDetailView({
               </span>
             )}
           </div>
+          {(employee.submittedBy?.name || employee.submittedBy?.email) && (
+            <p className="mt-2 text-xs text-[#475569]">
+              Submitted by{" "}
+              <span className="font-semibold text-[#0F172A]">
+                {employee.submittedBy.name ?? "Registration Submitter"}
+              </span>
+              {employee.submittedBy.email ? (
+                <>
+                  {" "}
+                  <span className="text-[#64748B]">({employee.submittedBy.email})</span>
+                </>
+              ) : null}
+            </p>
+          )}
+          <div className="mt-2">
+            <ApprovalTimeline status={status} />
+            {history.length > 0 && (
+              <div className="mt-1.5">
+                {history.slice(-3).map((item, i) => (
+                  <p key={i} className="text-[11px] text-[#64748B]">
+                    {item.action.replace(/_/g, " ")}
+                    {item.performedBy?.name ? ` · ${item.performedBy.name}` : ""}
+                    {" · "}
+                    {new Date(item.createdAt).toLocaleString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {[
               { id: "l1-contact", label: "Contact" },
@@ -222,28 +256,6 @@ export function EmployeeDetailView({
 
       <FieldChangesPanel changes={employee.pendingFieldChanges} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <History className="h-4 w-4 text-[#1D4ED8]" />
-            Approval Timeline
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ApprovalTimeline status={status} />
-        </CardContent>
-      </Card>
-
-      {employee.submittedBy?.name && (
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-sm font-medium text-sky-800">Submitted by</p>
-          <p className="mt-1 text-sm text-sky-700">
-            {employee.submittedBy.name}
-            {employee.submittedBy.email ? ` (${employee.submittedBy.email})` : ""}
-          </p>
-        </div>
-      )}
-
       {employee.l1Decision?.action === "APPROVE" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
           <p className="text-sm font-medium text-emerald-800">Approved by</p>
@@ -278,7 +290,11 @@ export function EmployeeDetailView({
               submittedAt: employee.submittedAt
                 ? new Date(employee.submittedAt).toLocaleString("en-IN")
                 : undefined,
-              submittedBy: employee.submittedBy?.name,
+              submittedBy: employee.submittedBy
+                ? [employee.submittedBy.name, employee.submittedBy.email]
+                    .filter(Boolean)
+                    .join(" · ")
+                : undefined,
             }}
           />
         </DetailSection>
@@ -361,35 +377,6 @@ export function EmployeeDetailView({
         </p>
         <DocumentPreviewGrid documents={documents} />
       </DetailSection>
-
-      {history.length > 0 && (
-        <DetailSection title="Approval History">
-          <div className="space-y-3">
-            {history.map((item, i) => (
-              <div
-                key={i}
-                className="flex flex-wrap items-start justify-between gap-2 border-b border-[#E2E8F0] pb-3 last:border-0"
-              >
-                <div>
-                  <p className="text-sm font-medium text-primary">
-                    {item.action.replace(/_/g, " ")}
-                  </p>
-                  <p className="text-xs text-[#64748B]">
-                    {item.fromStatus} → {item.toStatus}
-                    {item.performedBy?.name && ` · ${item.performedBy.name}`}
-                  </p>
-                  {item.comment && (
-                    <p className="mt-1 text-sm text-[#64748B]">{item.comment}</p>
-                  )}
-                </div>
-                <time className="text-xs text-[#64748B]">
-                  {new Date(item.createdAt).toLocaleString("en-IN")}
-                </time>
-              </div>
-            ))}
-          </div>
-        </DetailSection>
-      )}
 
       <section id="l1-review" className="mt-2 scroll-mt-24 space-y-3 border-t border-[#E2E8F0] pt-6">
         <div>

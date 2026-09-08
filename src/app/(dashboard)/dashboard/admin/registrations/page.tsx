@@ -27,6 +27,7 @@ export default async function AdminRegistrationsPage() {
       <RegistrationsTable
         registrations={registrations}
         showViewLink
+        showSubmitter
         viewPathPrefix="/dashboard/admin/registrations"
         emptyMessage="No L2-approved registrations have been forwarded yet."
       />

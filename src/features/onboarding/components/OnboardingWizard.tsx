@@ -490,10 +490,10 @@ export function OnboardingWizard({
   }
 
   return (
-    <div className="dashboard-form-panel flex flex-col">
+    <div className="dashboard-form-panel flex h-[calc(100dvh-7.5rem)] min-h-0 flex-1 flex-col overflow-hidden">
       <div
         id="onboarding-form-chrome"
-        className="sticky top-0 z-30 rounded-t-2xl border-b border-[#E2E8F0] bg-white px-4 py-3 shadow-[0_8px_20px_-8px_rgba(15,23,42,0.18)] sm:px-6"
+        className="relative z-10 shrink-0 border-b border-[#E2E8F0] bg-white px-4 py-3 sm:px-6"
       >
         <FormStepNav
           currentStep={currentStep}
@@ -507,92 +507,92 @@ export function OnboardingWizard({
         />
       </div>
 
-      <div className="flex flex-col">
-        <div className="px-4 py-4 sm:px-6 sm:py-6">
-          {employee.correctionNotes && (
-            <div className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
-              <div>
-                <p className="text-sm font-semibold text-amber-800">
-                  Reversed — Update Required
-                </p>
-                <p className="mt-1 text-sm text-amber-700">{employee.correctionNotes}</p>
-                <p className="mt-2 text-xs text-amber-700">
-                  Please update the mentioned details and click Update &amp; Resubmit.
-                </p>
-              </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6 sm:py-6">
+        {employee.correctionNotes && (
+          <div className="mb-6 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">
+                Reversed — Update Required
+              </p>
+              <p className="mt-1 text-sm text-amber-700">{employee.correctionNotes}</p>
+              <p className="mt-2 text-xs text-amber-700">
+                Please update the mentioned details and click Update &amp; Resubmit.
+              </p>
             </div>
-          )}
-
-          <div className="pb-8">
-            {currentStep === 1 && (
-              <ApplicantFormStep
-                defaultValues={formData}
-                email={contactEmail}
-                phone={contactPhone}
-                registrationMode={isNewRegistration}
-                onContactChange={(field, value) => {
-                  if (field === "email") setContactEmail(value);
-                  else setContactPhone(value);
-                }}
-                formId={formId}
-                onSubmit={handleStepSubmit}
-                onAutoSave={(data) => void handleAutoSave(1, data)}
-              />
-            )}
-            {currentStep === 2 && (
-              <ReferencesStep
-                defaultValues={formData}
-                formId={formId}
-                onSubmit={handleStepSubmit}
-                onAutoSave={(data) => void handleAutoSave(2, data)}
-              />
-            )}
-            {currentStep === 3 && (
-              <FamilyStep
-                defaultValues={formData}
-                formId={formId}
-                onSubmit={handleStepSubmit}
-                onAutoSave={(data) => void handleAutoSave(3, data)}
-              />
-            )}
-            {currentStep === 4 && (
-              <NomineeStep
-                defaultValues={formData}
-                formId={formId}
-                onSubmit={handleStepSubmit}
-                onAutoSave={(data) => void handleAutoSave(4, data)}
-              />
-            )}
-            {currentStep === 5 && (
-              <AdditionalStep
-                defaultValues={formData}
-                formId={formId}
-                onSubmit={handleStepSubmit}
-                onAutoSave={(data) => void handleAutoSave(5, data)}
-              />
-            )}
-            {currentStep === 6 && (
-              <DocumentsStep
-                documents={documents}
-                onDocumentsChange={setDocuments}
-                isExServiceman={Boolean(formData.exServiceman?.isExServiceman)}
-                isGunman={Boolean(formData.gunman?.isGunman)}
-                ensureApplicationReady={ensureApplicationReady}
-              />
-            )}
-            {currentStep === 7 && (
-              <DeclarationStep
-                defaultValues={formData.declaration}
-                formId={formId}
-                onSubmit={handleDeclarationSubmit}
-                onAutoSave={(data) => void handleAutoSave(7, data)}
-              />
-            )}
           </div>
-        </div>
+        )}
 
-        <div className="sticky bottom-0 z-20 flex items-center justify-between gap-4 border-t border-[#E2E8F0] bg-white px-4 py-4 shadow-[0_-8px_16px_-12px_rgba(15,23,42,0.2)] sm:px-6">
+        <div className="pb-2">
+          {currentStep === 1 && (
+            <ApplicantFormStep
+              defaultValues={formData}
+              email={contactEmail}
+              phone={contactPhone}
+              registrationMode={isNewRegistration}
+              onContactChange={(field, value) => {
+                if (field === "email") setContactEmail(value);
+                else setContactPhone(value);
+              }}
+              formId={formId}
+              onSubmit={handleStepSubmit}
+              onAutoSave={(data) => void handleAutoSave(1, data)}
+            />
+          )}
+          {currentStep === 2 && (
+            <ReferencesStep
+              defaultValues={formData}
+              formId={formId}
+              onSubmit={handleStepSubmit}
+              onAutoSave={(data) => void handleAutoSave(2, data)}
+            />
+          )}
+          {currentStep === 3 && (
+            <FamilyStep
+              defaultValues={formData}
+              formId={formId}
+              onSubmit={handleStepSubmit}
+              onAutoSave={(data) => void handleAutoSave(3, data)}
+            />
+          )}
+          {currentStep === 4 && (
+            <NomineeStep
+              defaultValues={formData}
+              formId={formId}
+              onSubmit={handleStepSubmit}
+              onAutoSave={(data) => void handleAutoSave(4, data)}
+            />
+          )}
+          {currentStep === 5 && (
+            <AdditionalStep
+              defaultValues={formData}
+              formId={formId}
+              onSubmit={handleStepSubmit}
+              onAutoSave={(data) => void handleAutoSave(5, data)}
+            />
+          )}
+          {currentStep === 6 && (
+            <DocumentsStep
+              documents={documents}
+              onDocumentsChange={setDocuments}
+              isExServiceman={Boolean(formData.exServiceman?.isExServiceman)}
+              isGunman={Boolean(formData.gunman?.isGunman)}
+              ensureApplicationReady={ensureApplicationReady}
+            />
+          )}
+          {currentStep === 7 && (
+            <DeclarationStep
+              defaultValues={formData.declaration}
+              formId={formId}
+              onSubmit={handleDeclarationSubmit}
+              onAutoSave={(data) => void handleAutoSave(7, data)}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="relative z-10 shrink-0 border-t border-[#E2E8F0] bg-white px-4 py-3 sm:px-6">
+        <div className="flex items-center justify-between gap-3">
           <Button
             type="button"
             variant="outline"

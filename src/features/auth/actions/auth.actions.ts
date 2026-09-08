@@ -1,6 +1,8 @@
 "use server";
 
-import { signIn, signOut } from "@/lib/auth/config";
+import { cookies } from "next/headers";
+import { encode } from "@auth/core/jwt";
+import { signOut } from "@/lib/auth/config";
 import { connectDB } from "@/lib/db/connect";
 import { User } from "@/lib/db/models/User";
 import {
@@ -20,8 +22,12 @@ import {
   employeeOtpSchema,
 } from "@/features/auth/schemas/auth.schema";
 import { STAFF_ROLE_LABELS } from "@/features/auth/constants";
-import { ROLE_DASHBOARD_PATH } from "@/types/enums";
-import { canAccessRoute } from "@/lib/auth/permissions";
+import {
+  ACCOUNT_LOCK_MINUTES,
+  MAX_LOGIN_ATTEMPTS,
+  ROLE_DASHBOARD_PATH,
+} from "@/types/enums";
+import { canAccessRoute, isStaffRole } from "@/lib/auth/permissions";
 import { requireStaffAuth } from "@/lib/auth/guards";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
@@ -44,6 +50,50 @@ function resolveStaffRedirect(
   return defaultRedirect;
 }
 
+const STAFF_SESSION_MAX_AGE = 60 * 60 * 8;
+
+function getStaffSessionCookieName(): string {
+  const url = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "";
+  return url.startsWith("https://")
+    ? "__Secure-authjs.session-token"
+    : "authjs.session-token";
+}
+
+async function createStaffSessionCookie(user: {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+}): Promise<void> {
+  const secret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error("AUTH_SECRET must be defined");
+  }
+
+  const cookieName = getStaffSessionCookieName();
+  const token = await encode({
+    token: {
+      name: user.name,
+      email: user.email,
+      sub: user.id,
+      id: user.id,
+      role: user.role,
+    },
+    secret,
+    salt: cookieName,
+    maxAge: STAFF_SESSION_MAX_AGE,
+  });
+
+  const store = await cookies();
+  store.set(cookieName, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: cookieName.startsWith("__Secure-"),
+    maxAge: STAFF_SESSION_MAX_AGE,
+  });
+}
+
 export async function staffLoginAction(
   formData: FormData
 ): Promise<ActionResult<{ redirectTo: string }>> {
@@ -63,13 +113,12 @@ export async function staffLoginAction(
   const callbackUrl = formData.get("callbackUrl")?.toString() ?? "";
 
   try {
-    const result = await signIn("credentials", {
-      email: parsed.data.email,
-      password: parsed.data.password,
-      redirect: false,
+    await connectDB();
+    const dbUser = await User.findOne({
+      email: parsed.data.email.toLowerCase(),
     });
 
-    if (result?.error) {
+    if (!dbUser || !dbUser.isActive || !isStaffRole(dbUser.role)) {
       return {
         success: false,
         error: "Invalid email or password",
@@ -77,50 +126,7 @@ export async function staffLoginAction(
       };
     }
 
-    await connectDB();
-    const dbUser = await User.findOne({
-      email: parsed.data.email.toLowerCase(),
-      isActive: true,
-    });
-
-    if (!dbUser) {
-      await signOut({ redirect: false });
-      return { success: false, error: "Authentication failed" };
-    }
-
-    if (dbUser.role !== parsed.data.role) {
-      await signOut({ redirect: false });
-      return {
-        success: false,
-        error: `Selected role does not match your account. Please choose "${STAFF_ROLE_LABELS[dbUser.role] ?? dbUser.role}".`,
-        code: "ROLE_MISMATCH",
-      };
-    }
-
-    const redirectTo = resolveStaffRedirect(dbUser.role, callbackUrl);
-    return { success: true, data: { redirectTo } };
-  } catch (error) {
-    const rawMessage = error instanceof Error ? error.message : String(error ?? "");
-    const message = rawMessage.toLowerCase();
-
-    try {
-      await connectDB();
-      const lockedUser = await User.findOne({
-        email: parsed.data.email.toLowerCase(),
-        isActive: true,
-      }).select("lockedUntil");
-      if (lockedUser?.lockedUntil && lockedUser.lockedUntil > new Date()) {
-        return {
-          success: false,
-          error: "Account is temporarily locked. Try again later.",
-          code: "ACCOUNT_LOCKED",
-        };
-      }
-    } catch {
-      // no-op: preserve existing behavior below
-    }
-
-    if (message.includes("locked") || message.includes("callbackrouteerror")) {
+    if (dbUser.lockedUntil && dbUser.lockedUntil > new Date()) {
       return {
         success: false,
         error: "Account is temporarily locked. Try again later.",
@@ -128,6 +134,50 @@ export async function staffLoginAction(
       };
     }
 
+    const isValid = await verifyPassword(
+      parsed.data.password,
+      dbUser.passwordHash
+    );
+
+    if (!isValid) {
+      dbUser.failedLoginAttempts += 1;
+      if (dbUser.failedLoginAttempts >= MAX_LOGIN_ATTEMPTS) {
+        dbUser.lockedUntil = new Date(
+          Date.now() + ACCOUNT_LOCK_MINUTES * 60 * 1000
+        );
+        dbUser.failedLoginAttempts = 0;
+      }
+      await dbUser.save();
+      return {
+        success: false,
+        error: "Invalid email or password",
+        code: "INVALID_CREDENTIALS",
+      };
+    }
+
+    if (dbUser.role !== parsed.data.role) {
+      return {
+        success: false,
+        error: `Selected role does not match your account. Please choose "${STAFF_ROLE_LABELS[dbUser.role] ?? dbUser.role}".`,
+        code: "ROLE_MISMATCH",
+      };
+    }
+
+    dbUser.failedLoginAttempts = 0;
+    dbUser.lockedUntil = undefined;
+    dbUser.lastLoginAt = new Date();
+    await dbUser.save();
+
+    await createStaffSessionCookie({
+      id: dbUser._id.toString(),
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role,
+    });
+
+    const redirectTo = resolveStaffRedirect(dbUser.role, callbackUrl);
+    return { success: true, data: { redirectTo } };
+  } catch {
     return { success: false, error: "An unexpected error occurred" };
   }
 }

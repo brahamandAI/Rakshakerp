@@ -18,6 +18,7 @@ interface RegistrationsTableProps {
   showViewLink?: boolean;
   viewPathPrefix?: string;
   allowSubmitterEdit?: boolean;
+  showSubmitter?: boolean;
 }
 
 const EDITABLE = new Set([
@@ -43,6 +44,7 @@ export function RegistrationsTable({
   showViewLink = false,
   viewPathPrefix,
   allowSubmitterEdit = false,
+  showSubmitter = false,
 }: RegistrationsTableProps) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -57,6 +59,8 @@ export function RegistrationsTable({
         row.employeeId,
         row.temporaryEmployeeId,
         row.statusLabel,
+        row.submittedByName,
+        row.submittedByEmail,
       ]
         .filter(Boolean)
         .join(" "),
@@ -132,6 +136,11 @@ export function RegistrationsTable({
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
                     Submitted
                   </th>
+                  {showSubmitter && (
+                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
+                      Submitted By
+                    </th>
+                  )}
                   {showActions && (
                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
                       Actions
@@ -162,6 +171,22 @@ export function RegistrationsTable({
                       )}
                     </td>
                     <td className="px-4 py-3 text-[#64748B]">{formatDate(row.submittedAt)}</td>
+                    {showSubmitter && (
+                      <td className="px-4 py-3 text-[#64748B]">
+                        {row.submittedByName || row.submittedByEmail ? (
+                          <>
+                            <span className="block font-medium text-[#0F172A]">
+                              {row.submittedByName ?? "—"}
+                            </span>
+                            {row.submittedByEmail && (
+                              <span className="block text-xs">{row.submittedByEmail}</span>
+                            )}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    )}
                     {showActions && (
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-2">

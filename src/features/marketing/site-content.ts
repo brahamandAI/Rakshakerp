@@ -25,6 +25,14 @@ export const SITE = {
   founded: "",
 } as const;
 
+export const POWERED_BY = {
+  prefix: "Powered by",
+  name: "Robustrix IT Solution",
+  href: "https://therobustrix.com/",
+  markSrc: "/brand/robustrix-mark.png",
+  markLightSrc: "/brand/robustrix-mark-light.png",
+} as const;
+
 /** Core platform capabilities shown on the home page */
 export const PLATFORM_FEATURES = [
   {

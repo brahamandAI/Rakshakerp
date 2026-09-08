@@ -8,10 +8,11 @@ import { useToast } from "@/components/ui/toast";
 import {
   createStaffUserAction,
   updateStaffUserAction,
+  deleteStaffUserAction,
 } from "@/features/admin/actions/admin.actions";
 import { getRoleLabel } from "@/lib/auth/permissions";
 import { UserRole } from "@/types/enums";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 
 const CREATABLE_ROLES = [
   UserRole.SUBMITTER,
@@ -107,6 +108,25 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
     });
   }
 
+  function handleDelete(user: StaffUserRow) {
+    if (user._id === currentUserId) {
+      toast({ title: "Error", description: "Cannot delete your own account.", variant: "destructive" });
+      return;
+    }
+    const confirmed = window.confirm(
+      `Delete ${user.name} (${user.email})? This cannot be undone. Existing registrations will still show this submitter's name and email.`
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      const result = await deleteStaffUserAction(user._id);
+      if (result.success) {
+        toast({ title: "Deleted", description: "User deleted successfully.", variant: "success" });
+      } else {
+        toast({ title: "Error", description: result.error, variant: "destructive" });
+      }
+    });
+  }
+
   function toggleActive(user: StaffUserRow) {
     if (user._id === currentUserId) {
       toast({ title: "Error", description: "Cannot deactivate your own account.", variant: "destructive" });
@@ -197,9 +217,21 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
                     <Pencil className="inline h-3.5 w-3.5" />
                   </button>
                   {user._id !== currentUserId && (
-                    <button type="button" onClick={() => toggleActive(user)} className="text-xs text-[#64748B] hover:text-primary">
-                      {user.isActive ? "Deactivate" : "Activate"}
-                    </button>
+                    <>
+                      <button type="button" onClick={() => toggleActive(user)} className="text-xs text-[#64748B] hover:text-primary">
+                        {user.isActive ? "Deactivate" : "Activate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(user)}
+                        disabled={isPending}
+                        className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700"
+                        aria-label={`Delete ${user.name}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Delete
+                      </button>
+                    </>
                   )}
                 </td>
               </tr>

@@ -10,7 +10,9 @@ function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
     fullName?: string;
     postAppliedFor?: string;
   } | undefined;
-  const submittedBy = emp.submittedBy as { name?: string } | null | undefined;
+  const submittedBy = emp.submittedBy as { name?: string; email?: string } | null | undefined;
+  const snapshotName = typeof emp.submittedByName === "string" ? emp.submittedByName : undefined;
+  const snapshotEmail = typeof emp.submittedByEmail === "string" ? emp.submittedByEmail : undefined;
   const l1Decision = emp.l1Decision as
     | { decidedBy?: { name?: string } | null; approvedByName?: string }
     | undefined;
@@ -30,9 +32,13 @@ function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
       ? new Date(emp.l1ApprovedAt as Date).toISOString()
       : undefined,
     submittedByName:
-      submittedBy && typeof submittedBy === "object" && submittedBy.name
+      (submittedBy && typeof submittedBy === "object" && submittedBy.name
         ? submittedBy.name
-        : undefined,
+        : snapshotName) || undefined,
+    submittedByEmail:
+      (submittedBy && typeof submittedBy === "object" && submittedBy.email
+        ? submittedBy.email
+        : snapshotEmail) || undefined,
     l1ApprovedByName: l1Decision?.approvedByName || l1Decision?.decidedBy?.name,
   });
 }
@@ -83,7 +89,7 @@ export async function getL2Stats(l2UserId: string) {
 export async function getL2PendingApplications(): Promise<ApplicationListItem[]> {
   await connectDB();
   const items = await Employee.find(L2_PENDING_FILTER)
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .populate("l1Decision.decidedBy", "name")
     .sort({ l1ApprovedAt: -1 })
     .limit(50)
@@ -100,7 +106,7 @@ export async function getL2ApprovedApplications(
     "l2Decision.action": { $in: ["APPROVE", "FORWARD"] },
     "l2Decision.decidedBy": l2UserId,
   })
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .populate("l1Decision.decidedBy", "name")
     .sort({ approvedAt: -1 })
     .limit(50)
@@ -114,7 +120,7 @@ export async function getL2RejectedApplications(
 ): Promise<ApplicationListItem[]> {
   await connectDB();
   const items = await Employee.find(l2ReversedFilter(l2UserId))
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .populate("l1Decision.decidedBy", "name")
     .sort({ updatedAt: -1 })
     .limit(50)
@@ -136,7 +142,7 @@ export async function getL2AllApprovedRegistrations(): Promise<ApplicationListIt
     temporaryEmployeeId: { $exists: true, $ne: null },
     "l2Decision.action": { $in: ["APPROVE", "FORWARD"] },
   })
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .populate("l1Decision.decidedBy", "name")
     .sort({ approvedAt: -1, forwardedToAdminAt: -1 })
     .limit(200)
@@ -148,7 +154,7 @@ export async function getL2AllApprovedRegistrations(): Promise<ApplicationListIt
 export async function getL2RecentPending(limit = 5): Promise<ApplicationListItem[]> {
   await connectDB();
   const items = await Employee.find(L2_PENDING_FILTER)
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .populate("l1Decision.decidedBy", "name")
     .sort({ l1ApprovedAt: -1 })
     .limit(limit)

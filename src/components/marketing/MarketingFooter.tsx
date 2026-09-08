@@ -16,6 +16,7 @@ import { MARKETING_SECTIONS } from "@/features/marketing/sections";
 import { useMarketingSection } from "@/features/marketing/context/MarketingSectionProvider";
 import { HR_CONTACT } from "@/features/marketing/contact-content";
 import { RakshakBrandMark } from "@/components/brand/RakshakBrandMark";
+import { PoweredByRobustrix } from "@/components/brand/PoweredByRobustrix";
 
 const SOCIAL_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Linkedin,
@@ -167,25 +168,37 @@ export function MarketingFooter() {
           </div>
         </div>
 
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 sm:flex-row">
-          <p className="text-xs text-white/50">
-            © 2026 {SITE.legalName}. All Rights Reserved.
+        <div className="mt-12 grid gap-5 border-t border-white/10 pt-7 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+          <p className="text-center text-[11px] leading-relaxed text-white/45 lg:text-left">
+            © {new Date().getFullYear()} {SITE.legalName}. All rights reserved.
           </p>
-          <div className="flex flex-wrap justify-center gap-6 text-xs text-white/50">
-            <Link href="/privacy" className="hover:text-white/80">
+          <div className="flex justify-center">
+            <PoweredByRobustrix tone="dark" />
+          </div>
+          <nav
+            aria-label="Legal"
+            className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[11px] uppercase tracking-[0.14em] text-white/45 lg:justify-end"
+          >
+            <Link href="/privacy" className="transition-colors hover:text-white">
               Privacy Policy
             </Link>
-            <Link href="/terms" className="hover:text-white/80">
+            <span className="hidden text-white/20 sm:inline" aria-hidden>
+              |
+            </span>
+            <Link href="/terms" className="transition-colors hover:text-white">
               Terms &amp; Conditions
             </Link>
+            <span className="hidden text-white/20 sm:inline" aria-hidden>
+              |
+            </span>
             <button
               type="button"
               onClick={() => setSection("faq")}
-              className="hover:text-white/80"
+              className="transition-colors hover:text-white"
             >
               FAQ
             </button>
-          </div>
+          </nav>
         </div>
       </div>
     </footer>

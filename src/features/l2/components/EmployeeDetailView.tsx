@@ -22,7 +22,6 @@ import {
   HeartHandshake,
   FileText,
   Shield,
-  History,
   IdCard,
   Contact,
 } from "lucide-react";
@@ -194,6 +193,40 @@ export function EmployeeDetailView({
                 </span>
               )}
             </div>
+            {(employee.submittedBy?.name || employee.submittedBy?.email) && (
+              <p className="mt-2 text-xs text-[#475569]">
+                Submitted by{" "}
+                <span className="font-semibold text-[#0F172A]">
+                  {employee.submittedBy.name ?? "Registration Submitter"}
+                </span>
+                {employee.submittedBy.email ? (
+                  <>
+                    {" "}
+                    <span className="text-[#64748B]">({employee.submittedBy.email})</span>
+                  </>
+                ) : null}
+              </p>
+            )}
+            <div className="mt-2">
+              <ApprovalTimeline status={status} />
+              {history.length > 0 && (
+                <div className="mt-1.5">
+                  {history.slice(-3).map((item, i) => (
+                    <p key={i} className="text-[11px] text-[#64748B]">
+                      {item.action.replace(/_/g, " ")}
+                      {item.performedBy?.name ? ` · ${item.performedBy.name}` : ""}
+                      {" · "}
+                      {new Date(item.createdAt).toLocaleString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {[
                 { id: "l2-documents", label: "Documents" },
@@ -214,16 +247,6 @@ export function EmployeeDetailView({
       </div>
 
       <FieldChangesPanel changes={employee.pendingFieldChanges} />
-
-      {employee.submittedBy?.name && (
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
-          <p className="text-sm font-medium text-sky-800">Submitted by</p>
-          <p className="mt-1 text-sm text-sky-700">
-            {employee.submittedBy.name}
-            {employee.submittedBy.email ? ` (${employee.submittedBy.email})` : ""}
-          </p>
-        </div>
-      )}
 
       {(employee.correctionNotes || employee.rejectionReason) && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
@@ -255,11 +278,7 @@ export function EmployeeDetailView({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <DetailSection title="Approval Timeline" icon={History} className="lg:col-span-1">
-          <ApprovalTimeline status={status} />
-        </DetailSection>
-        <div className="grid gap-6 lg:col-span-2 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <DetailSection title="Contact" icon={Contact}>
           <KeyValueGrid
             data={{
@@ -268,7 +287,11 @@ export function EmployeeDetailView({
               submittedAt: employee.submittedAt
                 ? new Date(employee.submittedAt).toLocaleString("en-IN")
                 : undefined,
-              submittedBy: employee.submittedBy?.name,
+              submittedBy: employee.submittedBy
+                ? [employee.submittedBy.name, employee.submittedBy.email]
+                    .filter(Boolean)
+                    .join(" · ")
+                : undefined,
             }}
           />
         </DetailSection>
@@ -306,7 +329,6 @@ export function EmployeeDetailView({
             <KeyValueGrid data={employee.additionalDetails!} />
           </DetailSection>
         )}
-        </div>
       </div>
 
       {employee.education && (
@@ -365,35 +387,6 @@ export function EmployeeDetailView({
           employeeId={employee._id}
           showWhenEmpty={status === EmployeeStatus.L2_REVIEW}
         />
-      )}
-
-      {history.length > 0 && (
-        <DetailSection title="Approval History" icon={History}>
-          <div className="space-y-3">
-            {history.map((item, i) => (
-              <div
-                key={i}
-                className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-[#F1F5F9] bg-[#F8FAFC]/80 px-3 py-3"
-              >
-                <div>
-                  <p className="text-sm font-medium text-primary">
-                    {item.action.replace(/_/g, " ")}
-                  </p>
-                  <p className="text-xs text-[#64748B]">
-                    {item.fromStatus} → {item.toStatus}
-                    {item.performedBy?.name && ` · ${item.performedBy.name}`}
-                  </p>
-                  {item.comment && (
-                    <p className="mt-1 text-sm text-[#64748B]">{item.comment}</p>
-                  )}
-                </div>
-                <time className="text-xs text-[#64748B]">
-                  {new Date(item.createdAt).toLocaleString("en-IN")}
-                </time>
-              </div>
-            ))}
-          </div>
-        </DetailSection>
       )}
 
       <section

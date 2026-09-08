@@ -16,6 +16,7 @@ export interface ApplicationListItem {
   employeeId?: string;
   l1ApprovedAt?: string;
   submittedByName?: string;
+  submittedByEmail?: string;
   l1ApprovedByName?: string;
   /** Note L2 left when sending the application back to L1 */
   l2ReverseNote?: string;
@@ -34,7 +35,9 @@ export const L1_REVERSED_FROM_L2_FILTER = {
 
 function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
   const personal = emp.personalDetails as { fullName?: string; postAppliedFor?: string } | undefined;
-  const submittedBy = emp.submittedBy as { name?: string } | null | undefined;
+  const submittedBy = emp.submittedBy as { name?: string; email?: string } | null | undefined;
+  const snapshotName = typeof emp.submittedByName === "string" ? emp.submittedByName : undefined;
+  const snapshotEmail = typeof emp.submittedByEmail === "string" ? emp.submittedByEmail : undefined;
   const l1Decision = emp.l1Decision as
     | { decidedBy?: { name?: string } | null; approvedByName?: string }
     | undefined;
@@ -63,9 +66,13 @@ function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
       ? new Date(emp.l1ApprovedAt as Date).toISOString()
       : undefined,
     submittedByName:
-      submittedBy && typeof submittedBy === "object" && submittedBy.name
+      (submittedBy && typeof submittedBy === "object" && submittedBy.name
         ? submittedBy.name
-        : undefined,
+        : snapshotName) || undefined,
+    submittedByEmail:
+      (submittedBy && typeof submittedBy === "object" && submittedBy.email
+        ? submittedBy.email
+        : snapshotEmail) || undefined,
     l1ApprovedByName: l1Decision?.approvedByName || l1Decision?.decidedBy?.name,
     l2ReverseNote: isL2Reversal
       ? (l2Decision?.comment ?? (emp.correctionNotes as string | undefined))
@@ -117,7 +124,7 @@ export async function getL1ReversedFromL2Applications(): Promise<
 > {
   await connectDB();
   const items = await Employee.find(L1_REVERSED_FROM_L2_FILTER)
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .populate("l2Decision.decidedBy", "name")
     .sort({ "l2Decision.decidedAt": -1, updatedAt: -1 })
     .limit(50)
@@ -129,7 +136,7 @@ export async function getL1ReversedFromL2Applications(): Promise<
 export async function getL1PendingApplications(): Promise<ApplicationListItem[]> {
   await connectDB();
   const items = await Employee.find(L1_PENDING_FILTER)
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .sort({ submittedAt: -1 })
     .limit(50)
     .lean();
@@ -145,7 +152,7 @@ export async function getL1ApprovedApplications(
     "l1Decision.action": "APPROVE",
     "l1Decision.decidedBy": l1UserId,
   })
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .sort({ l1ApprovedAt: -1 })
     .limit(50)
     .lean();
@@ -168,7 +175,7 @@ export async function getL1RejectedApplications(
       { status: EmployeeStatus.REJECTED, "l1Decision.decidedBy": l1UserId },
     ],
   })
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .sort({ updatedAt: -1 })
     .limit(50)
     .lean();
@@ -189,7 +196,7 @@ export async function getL1AllApprovedRegistrations(): Promise<ApplicationListIt
     temporaryEmployeeId: { $exists: true, $ne: null },
     "l1Decision.action": "APPROVE",
   })
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .sort({ approvedAt: -1, l1ApprovedAt: -1 })
     .limit(200)
     .lean();
@@ -200,7 +207,7 @@ export async function getL1AllApprovedRegistrations(): Promise<ApplicationListIt
 export async function getL1RecentPending(limit = 5): Promise<ApplicationListItem[]> {
   await connectDB();
   const items = await Employee.find(L1_PENDING_FILTER)
-    .populate("submittedBy", "name")
+    .populate("submittedBy", "name email")
     .sort({ submittedAt: -1 })
     .limit(limit)
     .lean();

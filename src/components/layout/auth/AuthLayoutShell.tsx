@@ -61,9 +61,11 @@ export function AuthLayoutShell({
           </div>
         </div>
 
-        <p className="mt-5 animate-fade-in text-center text-xs text-[#94A3B8] stagger-3">
-          © {new Date().getFullYear()} Rakshak Securitas Pvt. Ltd.
-        </p>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          <p className="text-[11px] text-[#94A3B8]">
+            © {new Date().getFullYear()} Rakshak Securitas Pvt. Ltd.
+          </p>
+        </div>
       </div>
     </div>
   );

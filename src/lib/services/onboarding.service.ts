@@ -23,6 +23,7 @@ import { EmployeeStatus } from "@/types/enums";
 import { STEP_SCHEMAS } from "@/features/onboarding/schemas/onboarding.schema";
 import { computeFieldChanges } from "@/lib/utils/field-changes";
 import { toClientProps } from "@/lib/serialize/client-props";
+import { getSubmitterSnapshot } from "@/lib/services/submitter-snapshot";
 
 export class OnboardingError extends Error {
   constructor(
@@ -751,6 +752,12 @@ export async function submitOnboardingApplication(
   employee.l2Decision = undefined;
   if (options?.submittedBy && !employee.submittedBy) {
     employee.submittedBy = new mongoose.Types.ObjectId(options.submittedBy);
+  }
+  const submitterId = options?.submittedBy ?? employee.submittedBy?.toString();
+  if (submitterId) {
+    const snapshot = await getSubmitterSnapshot(submitterId);
+    if (snapshot.submittedByName) employee.submittedByName = snapshot.submittedByName;
+    if (snapshot.submittedByEmail) employee.submittedByEmail = snapshot.submittedByEmail;
   }
   await employee.save();
 

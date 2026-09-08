@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, FileText, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FileText, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface RegistrationSubmittedSuccessProps {
@@ -76,6 +76,18 @@ export function RegistrationSubmittedSuccess({
         </div>
 
         <div className="mt-8 grid gap-3 sm:grid-cols-2">
+          <Button
+            variant="outline"
+            className="h-11 w-full whitespace-normal px-4 leading-snug sm:col-span-2"
+            onClick={() => {
+              window.location.assign(
+                submitterMode ? "/dashboard/submitter" : "/apply"
+              );
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           {submitterMode ? (
             <>
               {employeeId && (

@@ -33,6 +33,8 @@ export interface IEmployee extends Document {
     newValue: string;
   }>;
   submittedBy?: mongoose.Types.ObjectId;
+  submittedByName?: string;
+  submittedByEmail?: string;
   assignedL1Id?: mongoose.Types.ObjectId;
   l1Decision?: {
     action: "APPROVE" | "REJECT" | "RETURN";
@@ -120,6 +122,8 @@ const EmployeeSchema = new Schema<IEmployee>(
       default: [],
     },
     submittedBy: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    submittedByName: { type: String, trim: true },
+    submittedByEmail: { type: String, trim: true, lowercase: true },
     assignedL1Id: { type: Schema.Types.ObjectId, ref: "User", index: true },
     l1Decision: {
       action: { type: String, enum: ["APPROVE", "REJECT", "RETURN"] },

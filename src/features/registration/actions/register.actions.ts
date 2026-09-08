@@ -13,6 +13,7 @@ import { mapStep1DataToEmployeeFields } from "@/lib/services/onboarding.service"
 import { STEP_SCHEMAS } from "@/features/onboarding/schemas/onboarding.schema";
 import { auth } from "@/lib/auth/config";
 import mongoose from "mongoose";
+import { getSubmitterSnapshot } from "@/lib/services/submitter-snapshot";
 
 export type RegisterResult =
   | { success: true; applicationRef: string }
@@ -75,6 +76,7 @@ export async function registerEmployeeAction(
 
   const applicationRef = generateApplicationRef();
   const submitterId = await getSubmitterId();
+  const submitterSnapshot = await getSubmitterSnapshot(submitterId);
 
   const employee = await Employee.create({
     applicationRef,
@@ -85,7 +87,7 @@ export async function registerEmployeeAction(
     currentStep: 1,
     completedSteps: [],
     ...(submitterId
-      ? { submittedBy: new mongoose.Types.ObjectId(submitterId) }
+      ? { submittedBy: new mongoose.Types.ObjectId(submitterId), ...submitterSnapshot }
       : {}),
   });
 
@@ -148,6 +150,7 @@ export async function registerAndSaveStep1Action(
   const stepFields = mapStep1DataToEmployeeFields(stepResult.data);
   const now = new Date();
   const submitterId = await getSubmitterId();
+  const submitterSnapshot = await getSubmitterSnapshot(submitterId);
 
   const employee = await Employee.create({
     applicationRef,
@@ -167,7 +170,7 @@ export async function registerAndSaveStep1Action(
     completedSteps: [1],
     lastSavedAt: now,
     ...(submitterId
-      ? { submittedBy: new mongoose.Types.ObjectId(submitterId) }
+      ? { submittedBy: new mongoose.Types.ObjectId(submitterId), ...submitterSnapshot }
       : {}),
   });
 

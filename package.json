@@ -7,7 +7,7 @@
     "clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\"",
     "prebuild": "npm run clean",
     "build": "node scripts/build.mjs",
-    "start": "next start",
+    "start": "node scripts/start-prod.js",
     "lint": "next lint",
     "db:check": "tsx --env-file=.env.local scripts/check-db.ts",
     "db:ip": "tsx scripts/show-atlas-ip.ts",
@@ -55,3 +55,6 @@
     "typescript": "^5"
   }
 }
+
+
+

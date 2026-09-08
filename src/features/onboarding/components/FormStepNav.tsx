@@ -22,34 +22,31 @@ export function FormStepNav({
   trailing,
 }: FormStepNavProps) {
   return (
-    <nav aria-label="Form sections">
-      <div className="flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <nav aria-label="Form sections" className="bg-white">
+      <div className="flex overflow-x-auto border-b border-[#E2E8F0] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {ONBOARDING_STEPS.map((step) => {
           const done = completedSteps.includes(step.id);
           const active = step.id === currentStep;
-          const handleClick = () => {
-            if (onStepClick) onStepClick(step.id);
-          };
 
           return (
             <button
               key={step.id}
               type="button"
-              onClick={handleClick}
+              onClick={() => onStepClick?.(step.id)}
               suppressHydrationWarning
               className={cn(
-                "flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors",
-                active && "bg-[#EFF6FF] text-[#1D4ED8] ring-1 ring-[#BFDBFE]",
-                !active && done && "text-[#334155] hover:bg-[#F8FAFC]",
-                !active && !done && "text-[#94A3B8] hover:bg-[#F8FAFC]"
+                "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-left text-xs transition-colors sm:px-3.5",
+                active && "border-[#0B1F3A] text-[#0B1F3A]",
+                !active && done && "border-transparent text-[#334155] hover:text-[#0B1F3A]",
+                !active && !done && "border-transparent text-[#94A3B8] hover:text-[#64748B]"
               )}
             >
               <span
                 className={cn(
                   "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold",
-                  done && "bg-green-600 text-white",
-                  active && !done && "bg-[#1D4ED8] text-white",
-                  !active && !done && "bg-[#E2E8F0] text-[#64748B]"
+                  done && "bg-emerald-600 text-white",
+                  active && !done && "bg-[#0B1F3A] text-white",
+                  !active && !done && "bg-[#EEF2F7] text-[#64748B]"
                 )}
               >
                 {done ? <Check className="h-3 w-3" /> : step.id}
@@ -59,10 +56,10 @@ export function FormStepNav({
           );
         })}
       </div>
-      <div className="mt-2 flex items-center justify-between gap-3">
+      <div className="mt-2.5 flex items-center justify-between gap-3">
         <p className="min-w-0 truncate text-[11px] font-medium text-[#64748B]">
           Section {currentStep} of {ONBOARDING_TOTAL_STEPS}:{" "}
-          <span className="text-[#1E3A8A]">
+          <span className="text-[#0B1F3A]">
             {ONBOARDING_STEPS[currentStep - 1]?.label}
           </span>
         </p>

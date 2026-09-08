@@ -1,6 +1,5 @@
 "use client";
 
-import { CheckCircle2, Circle, Clock3, Undo2, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface ApprovalTimelineItem {
@@ -13,37 +12,25 @@ export interface ApprovalTimelineItem {
   performedByRole?: string;
 }
 
-const ACTION_META: Record<
-  string,
-  { label: string; tone: "blue" | "green" | "amber" | "purple" | "slate" }
-> = {
-  SUBMIT: { label: "Submitted by Registration Submitter", tone: "blue" },
-  RESUBMIT: { label: "Updated & Resubmitted", tone: "blue" },
-  L1_APPROVE: { label: "Approved by L1 Approver", tone: "green" },
-  L1_RETURN: { label: "Reversed by L1 Approver", tone: "amber" },
-  L1_REJECT: { label: "Reversed by L1 Approver", tone: "amber" },
-  L2_APPROVE: { label: "Approved by L2 Approver", tone: "green" },
-  L2_RETURN: { label: "Reversed by L2 Approver", tone: "amber" },
-  L2_RETURN_TO_L1: { label: "Sent back to L1 by L2 Approver", tone: "amber" },
-  L2_REJECT: { label: "Reversed by L2 Approver", tone: "amber" },
-  L2_FORWARD: { label: "Forwarded by L2 Approver", tone: "purple" },
-  L2_FORWARD_ADMIN: { label: "Sent to Admin", tone: "purple" },
-  GENERATE_ID: { label: "Temporary Employee ID Generated", tone: "green" },
-};
-
-const TONE_CLASSES = {
-  blue: "border-blue-200 bg-blue-50 text-blue-800",
-  green: "border-green-200 bg-green-50 text-green-800",
-  amber: "border-amber-200 bg-amber-50 text-amber-900",
-  purple: "border-purple-200 bg-purple-50 text-purple-800",
-  slate: "border-slate-200 bg-slate-50 text-slate-700",
+const ACTION_META: Record<string, { label: string; tone: string }> = {
+  SUBMIT: { label: "Submitted", tone: "text-sky-700" },
+  RESUBMIT: { label: "Resubmitted", tone: "text-sky-700" },
+  L1_APPROVE: { label: "L1 approved", tone: "text-emerald-700" },
+  L1_RETURN: { label: "L1 reversed", tone: "text-amber-700" },
+  L1_REJECT: { label: "L1 reversed", tone: "text-amber-700" },
+  L2_APPROVE: { label: "L2 approved", tone: "text-emerald-700" },
+  L2_RETURN: { label: "L2 reversed", tone: "text-amber-700" },
+  L2_RETURN_TO_L1: { label: "Sent back to L1", tone: "text-amber-700" },
+  L2_REJECT: { label: "L2 reversed", tone: "text-amber-700" },
+  L2_FORWARD: { label: "Forwarded", tone: "text-violet-700" },
+  L2_FORWARD_ADMIN: { label: "Sent to Admin", tone: "text-violet-700" },
+  GENERATE_ID: { label: "Temp ID generated", tone: "text-emerald-700" },
 };
 
 function formatWhen(value: string | Date) {
   return new Date(value).toLocaleString("en-IN", {
     day: "numeric",
     month: "short",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -60,92 +47,41 @@ export function ApprovalStatusTimeline({
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
 
+  if (items.length === 0) return null;
+
   return (
-    <div className="ui-card overflow-hidden">
-      <div className="flex items-center justify-between border-b border-[#E2E8F0] bg-gradient-to-r from-[#EFF6FF] to-white px-4 py-3 sm:px-5">
-        <div>
-          <h3 className="font-heading text-base font-semibold text-[#0F172A]">
-            Approval Status
-          </h3>
-          <p className="text-xs text-[#64748B]">
-            Live timeline of who approved and when
-          </p>
-        </div>
-        {currentStatus && (
-          <span className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-700">
-            {currentStatus.replace(/_/g, " ")}
-          </span>
-        )}
-      </div>
-
-      <div className="p-4 sm:p-5">
-        {items.length === 0 ? (
-          <p className="text-sm text-[#64748B]">No approval activity yet.</p>
-        ) : (
-          <ol className="relative space-y-4 before:absolute before:left-[15px] before:top-2 before:h-[calc(100%-1rem)] before:w-px before:bg-[#E2E8F0]">
-            {items.map((item, index) => {
-              const meta = ACTION_META[item.action] ?? {
-                label: item.action.replace(/_/g, " "),
-                tone: "slate" as const,
-              };
-              const isLatest = index === items.length - 1;
-              const Icon =
-                item.action.includes("RETURN") || item.action.includes("REJECT")
-                  ? Undo2
-                  : item.action.includes("APPROVE") || item.action === "GENERATE_ID"
-                    ? CheckCircle2
-                    : item.action.includes("SUBMIT")
-                      ? UserCheck
-                      : Clock3;
-
-              return (
-                <li key={`${item.action}-${index}`} className="relative pl-10">
-                  <span
-                    className={cn(
-                      "absolute left-0 top-0 flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm",
-                      isLatest ? "border-green-300 text-green-700" : "border-[#E2E8F0] text-[#64748B]"
-                    )}
-                  >
-                    {isLatest ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <Circle className="h-3.5 w-3.5" />
-                    )}
-                  </span>
-                  <div
-                    className={cn(
-                      "rounded-xl border px-3 py-3 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
-                      TONE_CLASSES[meta.tone]
-                    )}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <p className="text-sm font-semibold">{meta.label}</p>
-                      </div>
-                      <time className="text-[11px] opacity-80">{formatWhen(item.createdAt)}</time>
-                    </div>
-                    <p className="mt-1 text-xs opacity-90">
-                      {item.performedBy?.name
-                        ? `${item.performedBy.name}`
-                        : "System"}
-                      {item.performedByRole ? ` · ${item.performedByRole}` : ""}
-                    </p>
-                    <p className="mt-1 text-[11px] opacity-75">
-                      {item.fromStatus.replace(/_/g, " ")} → {item.toStatus.replace(/_/g, " ")}
-                    </p>
-                    {item.comment && (
-                      <p className="mt-2 rounded-lg bg-white/70 px-2.5 py-1.5 text-xs">
-                        Note: {item.comment}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </div>
-    </div>
+    <ol className="flex flex-col gap-1">
+      {items.map((item, index) => {
+        const meta = ACTION_META[item.action] ?? {
+          label: item.action.replace(/_/g, " "),
+          tone: "text-[#475569]",
+        };
+        const isLatest = index === items.length - 1;
+        return (
+          <li
+            key={`${item.action}-${index}`}
+            className={cn(
+              "flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] leading-snug",
+              isLatest ? meta.tone : "text-[#64748B]"
+            )}
+          >
+            <span className={cn("font-semibold", isLatest && meta.tone)}>
+              {meta.label}
+            </span>
+            <span className="text-[#94A3B8]">
+              {item.performedBy?.name ?? "System"}
+              {item.performedByRole ? ` · ${item.performedByRole}` : ""}
+            </span>
+            <time className="text-[#94A3B8]">{formatWhen(item.createdAt)}</time>
+            {item.comment && (
+              <span className="basis-full text-[#64748B]">Note: {item.comment}</span>
+            )}
+          </li>
+        );
+      })}
+      {currentStatus && (
+        <li className="sr-only">Current status {currentStatus.replace(/_/g, " ")}</li>
+      )}
+    </ol>
   );
 }

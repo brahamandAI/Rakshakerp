@@ -22,6 +22,7 @@ export default async function SupportRegistrationsPage() {
       <RegistrationsTable
         registrations={registrations}
         showViewLink
+        showSubmitter
         viewPathPrefix="/dashboard/support/registrations"
         emptyMessage="No L2-approved registrations are available."
       />

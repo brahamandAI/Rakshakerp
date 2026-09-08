@@ -16,6 +16,7 @@ import {
   updateSiteLocation,
   createStaffUser,
   updateStaffUser,
+  deleteStaffUser,
   updateOwnProfile,
 } from "@/lib/services/admin.service";
 import { getAuditLogs } from "@/lib/services/audit.service";
@@ -232,6 +233,22 @@ export async function updateStaffUserAction(
   }
   try {
     await updateStaffUser(ctx, id, parsed.data);
+    revalidateAdmin();
+    return { success: true };
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+export async function deleteStaffUserAction(
+  id: string
+): Promise<AdminActionResult> {
+  const ctx = await requireAdmin();
+  if (!id) {
+    return { success: false, error: "Invalid user" };
+  }
+  try {
+    await deleteStaffUser(ctx, id);
     revalidateAdmin();
     return { success: true };
   } catch (error) {

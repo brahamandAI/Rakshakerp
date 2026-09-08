@@ -5,6 +5,7 @@ import { Department } from "@/lib/db/models/Department";
 import { Designation } from "@/lib/db/models/Designation";
 import { SiteLocation } from "@/lib/db/models/SiteLocation";
 import { User } from "@/lib/db/models/User";
+import { Employee } from "@/lib/db/models/Employee";
 import { StaffRole, UserRole } from "@/types/enums";
 import { hashPassword } from "@/lib/auth/password";
 import { logAudit } from "@/lib/services/audit.service";
@@ -268,6 +269,45 @@ export async function updateStaffUser(ctx: AdminContext, id: string, data: Parti
   }
   await audit(ctx, "UPDATE", "USER", id, auditData);
   return user;
+}
+
+export async function deleteStaffUser(ctx: AdminContext, id: string): Promise<void> {
+  await connectDB();
+  if (id === ctx.userId) {
+    throw new AdminError("Cannot delete your own account", "FORBIDDEN");
+  }
+  const user = await User.findById(id);
+  if (!user) throw new AdminError("User not found", "NOT_FOUND");
+  if (!MANAGEABLE_ROLES.includes(user.role as StaffRole)) {
+    throw new AdminError("This user cannot be deleted here", "FORBIDDEN");
+  }
+  if (user.role === UserRole.ADMIN) {
+    const otherAdmins = await User.countDocuments({
+      role: UserRole.ADMIN,
+      _id: { $ne: user._id },
+      isActive: true,
+    });
+    if (otherAdmins === 0) {
+      throw new AdminError("Cannot delete the last active admin", "FORBIDDEN");
+    }
+  }
+
+  await Employee.updateMany(
+    { submittedBy: user._id },
+    {
+      $set: {
+        submittedByName: user.name,
+        submittedByEmail: user.email,
+      },
+    }
+  );
+
+  await User.findByIdAndDelete(id);
+  await audit(ctx, "DELETE", "USER", id, {
+    email: user.email,
+    role: user.role,
+    name: user.name,
+  });
 }
 
 export async function updateOwnProfile(ctx: AdminContext, data: { name?: string; phone?: string; department?: string }) {

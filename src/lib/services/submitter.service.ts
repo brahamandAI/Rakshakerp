@@ -22,6 +22,8 @@ export interface SubmitterRegistrationItem {
   employeeId?: string;
   forwardedToAdminAt?: string;
   rejectionComment?: string;
+  submittedByName?: string;
+  submittedByEmail?: string;
 }
 
 function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationItem {
@@ -46,6 +48,10 @@ function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationIte
             ? "Temporary Employee ID Generated"
             : getRegistrationStatusLabel(status);
 
+  const submittedBy = emp.submittedBy as { name?: string; email?: string } | null | undefined;
+  const snapshotName = typeof emp.submittedByName === "string" ? emp.submittedByName : undefined;
+  const snapshotEmail = typeof emp.submittedByEmail === "string" ? emp.submittedByEmail : undefined;
+
   return toClientProps({
     _id: String(emp._id),
     applicationRef: String(emp.applicationRef),
@@ -64,6 +70,14 @@ function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationIte
       ? new Date(emp.forwardedToAdminAt as Date).toISOString()
       : undefined,
     rejectionComment,
+    submittedByName:
+      (submittedBy && typeof submittedBy === "object" && submittedBy.name
+        ? submittedBy.name
+        : snapshotName) || undefined,
+    submittedByEmail:
+      (submittedBy && typeof submittedBy === "object" && submittedBy.email
+        ? submittedBy.email
+        : snapshotEmail) || undefined,
   });
 }
 
@@ -150,6 +164,7 @@ export async function getAdminCompletedRegistrations(): Promise<
 > {
   await connectDB();
   const items = await Employee.find(ADMIN_REGISTRATIONS_FILTER)
+    .populate("submittedBy", "name email")
     .sort({ forwardedToAdminAt: -1 })
     .limit(100)
     .lean();

@@ -2,23 +2,19 @@
 
 import Link from "next/link";
 import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  XCircle,
   AlertTriangle,
   Download,
   Eye,
   Printer,
   Shield,
   ArrowRight,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ApplicationStatusData,
   TimelineStep,
-  TimelineStepState,
 } from "@/features/application-status/constants";
 import { cn } from "@/lib/utils";
 
@@ -124,14 +120,11 @@ export function ApplicationStatusPortal({ data }: ApplicationStatusPortalProps) 
       )}
 
       <Card className="shadow-sm">
-        <CardContent className="p-6">
-          <h2 className="font-heading text-lg font-semibold text-primary">
-            Detailed Timeline
+        <CardContent className="p-4 sm:p-5">
+          <h2 className="font-heading text-sm font-semibold text-primary">
+            Progress
           </h2>
-          <p className="mt-1 text-sm text-[#64748B]">
-            Step-by-step progress of your application review and onboarding.
-          </p>
-          <div className="mt-6">
+          <div className="mt-3">
             <StatusTimeline steps={data.timeline} />
           </div>
         </CardContent>
@@ -142,66 +135,23 @@ export function ApplicationStatusPortal({ data }: ApplicationStatusPortalProps) 
 
 function StatusTimeline({ steps }: { steps: TimelineStep[] }) {
   return (
-    <ol className="relative space-y-0">
+    <ol className="flex flex-wrap items-center gap-1">
       {steps.map((step, index) => (
-        <li key={step.id} className="relative flex gap-4 pb-8 last:pb-0">
-          {index < steps.length - 1 && (
-            <span
-              className={cn(
-                "absolute left-[19px] top-10 h-[calc(100%-2rem)] w-0.5",
-                step.state === "completed" ? "bg-green-300" : "bg-[#E2E8F0]"
-              )}
-            />
-          )}
-          <TimelineIcon state={step.state} />
-          <div className="min-w-0 flex-1 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
-            <p
-              className={cn(
-                "font-medium",
-                step.state === "pending" ? "text-[#94A3B8]" : "text-primary"
-              )}
-            >
-              {step.title}
-            </p>
-            <p className="mt-1 text-sm text-[#64748B]">{step.description}</p>
-            {step.date && (
-              <p className="mt-2 text-xs font-medium text-accent">{step.date}</p>
+        <li key={step.id} className="flex items-center gap-1">
+          {index > 0 && <span className="text-[10px] text-[#CBD5E1]" aria-hidden>›</span>}
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none",
+              step.state === "completed" && "bg-emerald-50 text-emerald-700",
+              step.state === "current" && "bg-sky-100 text-sky-800 ring-1 ring-sky-200",
+              step.state === "error" && "bg-red-50 text-red-700",
+              step.state === "pending" && "bg-[#F1F5F9] text-[#94A3B8]"
             )}
-          </div>
+          >
+            {step.title}
+          </span>
         </li>
       ))}
     </ol>
   );
-}
-
-function TimelineIcon({ state }: { state: TimelineStepState }) {
-  const base =
-    "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm";
-
-  switch (state) {
-    case "completed":
-      return (
-        <div className={cn(base, "bg-green-100 ring-4 ring-green-50")}>
-          <CheckCircle2 className="h-5 w-5 text-green-600" />
-        </div>
-      );
-    case "current":
-      return (
-        <div className={cn(base, "bg-primary ring-4 ring-primary/15")}>
-          <Clock className="h-4 w-4 text-white" />
-        </div>
-      );
-    case "error":
-      return (
-        <div className={cn(base, "bg-red-100 ring-4 ring-red-50")}>
-          <XCircle className="h-5 w-5 text-red-600" />
-        </div>
-      );
-    default:
-      return (
-        <div className={cn(base, "border-2 border-[#E2E8F0] bg-white")}>
-          <Circle className="h-4 w-4 text-[#CBD5E1]" />
-        </div>
-      );
-  }
 }

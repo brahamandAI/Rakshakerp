@@ -1,4 +1,5 @@
 import { EmployeeStatus } from "@/types/enums";
+import { resolveSubmittedBy } from "@/lib/services/submitter-snapshot";
 
 /**
  * RSC → Client Component props must be plain JSON.
@@ -142,6 +143,8 @@ export function serializeReviewEmployee(employee: {
   declaration?: unknown;
   submittedAt?: unknown;
   submittedBy?: unknown;
+  submittedByName?: unknown;
+  submittedByEmail?: unknown;
   l1Decision?: ReviewDecision | null;
   l2Decision?: ReviewDecision | null;
   correctionNotes?: string;
@@ -171,7 +174,7 @@ export function serializeReviewEmployee(employee: {
     additionalDetails: clientMixed(employee.additionalDetails),
     declaration: clientMixed(employee.declaration),
     submittedAt: clientIsoDate(employee.submittedAt),
-    submittedBy: clientNamedUser(employee.submittedBy),
+    submittedBy: resolveSubmittedBy(employee),
     l1Decision: clientDecision(employee.l1Decision),
     l2Decision: clientDecision(employee.l2Decision),
     correctionNotes: employee.correctionNotes,
@@ -198,6 +201,9 @@ export function serializeRegistrationEmployee(employee: {
   gunman?: unknown;
   rejectionReason?: string | null;
   correctionNotes?: string | null;
+  submittedBy?: unknown;
+  submittedByName?: unknown;
+  submittedByEmail?: unknown;
 }) {
   return toClientProps({
     applicationRef: employee.applicationRef,
@@ -216,6 +222,7 @@ export function serializeRegistrationEmployee(employee: {
     gunman: clientMixed(employee.gunman),
     rejectionReason: employee.rejectionReason ?? undefined,
     correctionNotes: employee.correctionNotes ?? undefined,
+    submittedBy: resolveSubmittedBy(employee),
   });
 }
 

@@ -49,7 +49,7 @@ export function L2ApplicationTable({
     applications,
     (app) => app.status,
     (app) =>
-      [app.applicationRef, app.fullName, app.postAppliedFor, app.l1ApprovedByName]
+      [app.applicationRef, app.fullName, app.postAppliedFor, app.l1ApprovedByName, app.submittedByName, app.submittedByEmail]
         .filter(Boolean)
         .join(" "),
     (app) => app.l1ApprovedAt ?? app.submittedAt,
@@ -164,6 +164,9 @@ export function L2ApplicationTable({
                 <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">Post</th>
                 <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">Status</th>
                 <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
+                  Submitted By
+                </th>
+                <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
                   L1 Approved By
                 </th>
                 <th className="w-[1%] whitespace-nowrap px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
@@ -195,6 +198,22 @@ export function L2ApplicationTable({
                         </span>
                       ) : (
                         <StatusBadge status={app.status} />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-[#64748B]">
+                      {app.submittedByName || app.submittedByEmail ? (
+                        <>
+                          <span className="block font-medium text-[#0F172A]">
+                            {app.submittedByName ?? "—"}
+                          </span>
+                          {app.submittedByEmail && (
+                            <span className="block text-xs text-[#64748B]">
+                              {app.submittedByEmail}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "—"
                       )}
                     </td>
                     <td className="px-4 py-3 text-[#64748B]">
