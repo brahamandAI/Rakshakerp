@@ -89,9 +89,10 @@ const EmployeeSchema = new Schema<IEmployee>(
     temporaryEmployeeId: { type: String, sparse: true, unique: true, index: true },
     email: {
       type: String,
-      required: true,
+      required: false,
       lowercase: true,
       trim: true,
+      default: "",
     },
     phone: { type: String, required: true, trim: true },
     personalDetails: { type: Schema.Types.Mixed, default: {} },

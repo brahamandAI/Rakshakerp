@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,17 +28,19 @@ export function ProfileEditForm({ user }: ProfileEditFormProps) {
   const [phone, setPhone] = useState(user.phone ?? "");
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const router = useRouter();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
       const result = await updateProfileAction({
-        name,
-        department: department || undefined,
-        phone: phone || undefined,
+        name: name.trim(),
+        department: department.trim() || undefined,
+        phone: phone.trim() || undefined,
       });
       if (result.success) {
         toast({ title: "Saved", description: "Profile updated successfully.", variant: "success" });
+        router.refresh();
       } else {
         toast({ title: "Error", description: result.error, variant: "destructive" });
       }
@@ -45,7 +48,7 @@ export function ProfileEditForm({ user }: ProfileEditFormProps) {
   }
 
   return (
-    <Card className="max-w-lg">
+    <Card className="h-full border-[#E2E8F0] shadow-sm">
       <CardHeader>
         <CardTitle className="text-base">Account Details</CardTitle>
       </CardHeader>

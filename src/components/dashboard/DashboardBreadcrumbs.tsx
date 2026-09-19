@@ -27,6 +27,8 @@ const LABEL_MAP: Record<string, string> = {
   edit: "Edit",
   "id-cards": "ID Cards",
   generate: "Generate",
+  "pending-l1": "Pending L1",
+  "pending-l2": "Pending L2",
 };
 
 function humanize(segment: string) {

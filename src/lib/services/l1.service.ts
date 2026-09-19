@@ -3,6 +3,10 @@ import { Employee } from "@/lib/db/models/Employee";
 import { EmployeeStatus } from "@/types/enums";
 import { L1_PENDING_FILTER } from "@/lib/services/approval-queue";
 import { toClientProps } from "@/lib/serialize/client-props";
+import {
+  pickSearchableAdditional,
+  pickSearchablePersonal,
+} from "@/lib/ui/registration-search";
 
 export interface ApplicationListItem {
   _id: string;
@@ -14,6 +18,13 @@ export interface ApplicationListItem {
   status: EmployeeStatus;
   submittedAt?: string;
   employeeId?: string;
+  temporaryEmployeeId?: string;
+  fatherName?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  uanNo?: string;
+  esicNumber?: string;
+  accountNumber?: string;
   l1ApprovedAt?: string;
   submittedByName?: string;
   submittedByEmail?: string;
@@ -34,7 +45,21 @@ export const L1_REVERSED_FROM_L2_FILTER = {
 };
 
 function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
-  const personal = emp.personalDetails as { fullName?: string; postAppliedFor?: string } | undefined;
+  const personal = emp.personalDetails as {
+    fullName?: string;
+    postAppliedFor?: string;
+    fatherName?: string;
+    fatherOrHusbandName?: string;
+    aadhaarNumber?: string;
+    panNumber?: string;
+  } | undefined;
+  const additional = emp.additionalDetails as {
+    uanNo?: string;
+    esicNumber?: string;
+    accountNumber?: string;
+  } | undefined;
+  const searchablePersonal = pickSearchablePersonal(personal);
+  const searchableAdditional = pickSearchableAdditional(additional);
   const submittedBy = emp.submittedBy as { name?: string; email?: string } | null | undefined;
   const snapshotName = typeof emp.submittedByName === "string" ? emp.submittedByName : undefined;
   const snapshotEmail = typeof emp.submittedByEmail === "string" ? emp.submittedByEmail : undefined;
@@ -62,6 +87,13 @@ function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
       ? new Date(emp.submittedAt as Date).toISOString()
       : undefined,
     employeeId: emp.employeeId as string | undefined,
+    temporaryEmployeeId: emp.temporaryEmployeeId as string | undefined,
+    fatherName: searchablePersonal.fatherName || undefined,
+    aadhaarNumber: searchablePersonal.aadhaarNumber || undefined,
+    panNumber: searchablePersonal.panNumber || undefined,
+    uanNo: searchableAdditional.uanNo || undefined,
+    esicNumber: searchableAdditional.esicNumber || undefined,
+    accountNumber: searchableAdditional.accountNumber || undefined,
     l1ApprovedAt: emp.l1ApprovedAt
       ? new Date(emp.l1ApprovedAt as Date).toISOString()
       : undefined,

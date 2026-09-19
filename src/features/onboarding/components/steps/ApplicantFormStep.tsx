@@ -16,6 +16,7 @@ import { BLOOD_GROUPS, QUALIFICATIONS } from "@/features/onboarding/constants";
 import { useAutoSave } from "@/features/onboarding/components/AutoSaveIndicator";
 import { FormSection } from "@/features/onboarding/components/FormSection";
 import { EmployeeFormData } from "@/features/onboarding/types";
+import { z } from "zod";
 import { applySchema } from "@/features/registration/schemas/apply.schema";
 
 interface StepProps {
@@ -77,7 +78,7 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
         : "SINGLE") as ApplicantFormInput["personalDetails"]["maritalStatus"],
       bloodGroup: (BLOOD_GROUPS.includes(pd.bloodGroup as (typeof BLOOD_GROUPS)[number])
         ? pd.bloodGroup
-        : "O+") as ApplicantFormInput["personalDetails"]["bloodGroup"],
+        : "") as ApplicantFormInput["personalDetails"]["bloodGroup"],
       aadhaarNumber: formatAadhaarInput(pd.aadhaarNumber ?? ""),
       panNumber: pd.panNumber ?? "",
       identificationMarks: pd.identificationMarks ?? "",
@@ -108,6 +109,10 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
       previousEmployer: add.previousEmployer ?? "",
       uanNo: add.uanNo ?? "",
       esicNumber: add.esicNumber ?? "",
+      bankName: add.bankName ?? "",
+      bankBranchName: add.bankBranchName ?? "",
+      accountHolderName: add.accountHolderName ?? "",
+      accountNumber: add.accountNumber ?? "",
       ifscCode: add.ifscCode ?? "",
     },
   };
@@ -140,11 +145,15 @@ export function ApplicantFormStep({
 
   function submitStep(data: ApplicantFormInput) {
     if (registrationMode) {
-      const parsed = applySchema.safeParse({
-        fullName: data.personalDetails.fullName,
-        email,
-        phone,
-      });
+      const parsed = applySchema
+        .extend({
+          email: z.string().email("Enter a valid email").or(z.literal("")),
+        })
+        .safeParse({
+          fullName: data.personalDetails.fullName,
+          email,
+          phone,
+        });
       if (!parsed.success) {
         const fieldErrors = parsed.error.flatten().fieldErrors;
         setContactErrors({
@@ -171,7 +180,7 @@ export function ApplicantFormStep({
             <Input {...register("personalDetails.branchName")} error={errors.personalDetails?.branchName?.message} />
           </div>
           <div className="space-y-2">
-            <Label required>Client ID</Label>
+            <Label>Client ID</Label>
             <Input {...register("personalDetails.clientId")} error={errors.personalDetails?.clientId?.message} />
           </div>
           <div className="space-y-2">
@@ -183,7 +192,7 @@ export function ApplicantFormStep({
             />
           </div>
           <div className="space-y-2">
-            <Label required>Client Name</Label>
+            <Label>Client Name</Label>
             <Input {...register("personalDetails.clientName")} error={errors.personalDetails?.clientName?.message} />
           </div>
           <div className="space-y-2">
@@ -199,8 +208,15 @@ export function ApplicantFormStep({
             <Input {...register("personalDetails.fullName")} error={errors.personalDetails?.fullName?.message} />
           </div>
           <div className="space-y-2">
-            <Label required>Blood Group</Label>
-            <Select {...register("personalDetails.bloodGroup")} options={BLOOD_GROUPS.map((b) => ({ value: b, label: b }))} error={errors.personalDetails?.bloodGroup?.message} />
+            <Label>Blood Group</Label>
+            <Select
+              {...register("personalDetails.bloodGroup")}
+              options={[
+                { value: "", label: "Select blood group" },
+                ...BLOOD_GROUPS.map((b) => ({ value: b, label: b })),
+              ]}
+              error={errors.personalDetails?.bloodGroup?.message}
+            />
           </div>
           <div className="space-y-2">
             <Label required>Contact Number</Label>
@@ -245,7 +261,7 @@ export function ApplicantFormStep({
             <Input {...register("personalDetails.fatherName")} error={errors.personalDetails?.fatherName?.message} />
           </div>
           <div className="space-y-2">
-            <Label required>Mother&apos;s Name</Label>
+            <Label>Mother&apos;s Name</Label>
             <Input {...register("personalDetails.motherName")} error={errors.personalDetails?.motherName?.message} />
           </div>
           <div className="space-y-2">
@@ -270,7 +286,7 @@ export function ApplicantFormStep({
             </div>
           )}
           <div className="space-y-2">
-            <Label required>Email</Label>
+            <Label>Email</Label>
             {registrationMode ? (
               <Input
                 type="email"
@@ -318,15 +334,15 @@ export function ApplicantFormStep({
             <Input {...register("additionalDetails.weight")} placeholder="e.g. 65" error={errors.additionalDetails?.weight?.message} />
           </div>
           <div className="space-y-2">
-            <Label required>Eye Sight</Label>
+            <Label>Eye Sight</Label>
             <Input {...register("additionalDetails.eyeSight")} placeholder="6/6, Normal, etc." error={errors.additionalDetails?.eyeSight?.message} />
           </div>
           <div className="space-y-2">
-            <Label required>Color of Eyes</Label>
+            <Label>Color of Eyes</Label>
             <Input {...register("additionalDetails.eyeColor")} error={errors.additionalDetails?.eyeColor?.message} />
           </div>
           <div className="space-y-2">
-            <Label required>Hearing</Label>
+            <Label>Hearing</Label>
             <Input {...register("additionalDetails.hearing")} placeholder="Normal / Impaired" error={errors.additionalDetails?.hearing?.message} />
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -349,11 +365,13 @@ export function ApplicantFormStep({
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label required>Educational Qualification</Label>
+            <Label>Educational Qualification</Label>
             <Select
               {...register("education.educationalQualification")}
-              placeholder="Select qualification"
-              options={QUALIFICATIONS.map((q) => ({ value: q, label: q }))}
+              options={[
+                { value: "", label: "Select qualification" },
+                ...QUALIFICATIONS.map((q) => ({ value: q, label: q })),
+              ]}
               error={errors.education?.educationalQualification?.message}
             />
           </div>
@@ -370,7 +388,7 @@ export function ApplicantFormStep({
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label required>How soon you can join duties with us?</Label>
+            <Label>How soon you can join duties with us?</Label>
             <Input {...register("additionalDetails.joiningTimeline")} placeholder="Immediately / 15 days / 1 month" error={errors.additionalDetails?.joiningTimeline?.message} />
           </div>
           <div className="space-y-2 sm:col-span-2">
@@ -378,7 +396,7 @@ export function ApplicantFormStep({
             <Input {...register("additionalDetails.previousEmployer")} />
           </div>
           <div className="space-y-2">
-            <Label required>UAN No</Label>
+            <Label>UAN No</Label>
             <Input {...register("additionalDetails.uanNo")} error={errors.additionalDetails?.uanNo?.message} />
             <p className="text-xs text-[#64748B]">
               Don&apos;t have UAN? Generate a new UAN using:{" "}
@@ -396,20 +414,44 @@ export function ApplicantFormStep({
             <Label>ESIC Number</Label>
             <Input {...register("additionalDetails.esicNumber")} error={errors.additionalDetails?.esicNumber?.message} />
           </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label required>IFSC Code</Label>
-            <Input
-              {...register("additionalDetails.ifscCode")}
-              className="uppercase"
-              onChange={(e) =>
-                setValue(
-                  "additionalDetails.ifscCode",
-                  e.target.value.toUpperCase().replace(/\s/g, ""),
-                  { shouldValidate: true }
-                )
-              }
-              error={errors.additionalDetails?.ifscCode?.message}
-            />
+          <div className="sm:col-span-2 space-y-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+            <div>
+              <h4 className="text-sm font-semibold text-[#0F172A]">Bank Details</h4>
+              <p className="mt-0.5 text-xs text-[#64748B]">Optional — fill if available.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Bank Name</Label>
+                <Input {...register("additionalDetails.bankName")} error={errors.additionalDetails?.bankName?.message} />
+              </div>
+              <div className="space-y-2">
+                <Label>Branch Name</Label>
+                <Input {...register("additionalDetails.bankBranchName")} error={errors.additionalDetails?.bankBranchName?.message} />
+              </div>
+              <div className="space-y-2">
+                <Label>Account Holder Name</Label>
+                <Input {...register("additionalDetails.accountHolderName")} error={errors.additionalDetails?.accountHolderName?.message} />
+              </div>
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input {...register("additionalDetails.accountNumber")} error={errors.additionalDetails?.accountNumber?.message} />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label>IFSC Code</Label>
+                <Input
+                  {...register("additionalDetails.ifscCode")}
+                  className="uppercase"
+                  onChange={(e) =>
+                    setValue(
+                      "additionalDetails.ifscCode",
+                      e.target.value.toUpperCase().replace(/\s/g, ""),
+                      { shouldValidate: true }
+                    )
+                  }
+                  error={errors.additionalDetails?.ifscCode?.message}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </FormSection>

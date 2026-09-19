@@ -2,11 +2,21 @@ import { requireStaffAuth } from "@/lib/auth/guards";
 import { UserRole } from "@/types/enums";
 import { getSubmitterRegistrations } from "@/lib/services/submitter.service";
 import { RegistrationsTable } from "@/features/submitter/components/RegistrationsTable";
+import { APPROVAL_STATUS_FILTERS } from "@/lib/ui/approval-status-filter";
 
 export const metadata = { title: "All Registrations | Submitter" };
 
-export default async function SubmitterRegistrationsPage() {
+const VALID_STATUS = new Set(APPROVAL_STATUS_FILTERS.map((item) => item.value));
+
+interface PageProps {
+  searchParams: Promise<{ status?: string }>;
+}
+
+export default async function SubmitterRegistrationsPage({ searchParams }: PageProps) {
   const { user } = await requireStaffAuth(UserRole.SUBMITTER);
+  const params = await searchParams;
+  const statusFilter =
+    params.status && VALID_STATUS.has(params.status) ? params.status : "all";
   const registrations = await getSubmitterRegistrations(user.id);
 
   return (
@@ -26,6 +36,7 @@ export default async function SubmitterRegistrationsPage() {
         allowSubmitterEdit
         showViewLink
         viewPathPrefix="/dashboard/submitter/registrations"
+        initialStatusFilter={statusFilter}
       />
     </div>
   );

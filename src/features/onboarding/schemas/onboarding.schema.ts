@@ -9,22 +9,23 @@ const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 export const personalDetailsSchema = z
   .object({
     branchName: z.string().min(1, "Branch name is required"),
-    clientId: z.string().min(1, "Client ID is required"),
-    clientName: z.string().min(1, "Client name is required"),
+    clientId: z.string().optional(),
+    clientName: z.string().optional(),
     siteName: z.string().min(1, "Site name is required"),
     dateOfJoining: z.string().min(1, "Date of joining is required"),
     postAppliedFor: z.string().min(1, "Post applied for is required"),
     fullName: z.string().min(2, "Full name is required").max(100),
     fatherName: z.string().min(2, "Father's name is required"),
-    motherName: z.string().min(2, "Mother's name is required"),
+    motherName: z.string().optional(),
     spouseOrNok: z.string().optional(),
     dateOfBirth: z.string().min(1, "Date of birth is required"),
     maritalStatus: z.enum(["SINGLE", "MARRIED", "WIDOWED"], {
       required_error: "Marital status is required",
     }),
-    bloodGroup: z.enum([...BLOOD_GROUPS] as [string, ...string[]], {
-      required_error: "Blood group is required",
-    }),
+    bloodGroup: z
+      .enum([...BLOOD_GROUPS] as [string, ...string[]])
+      .or(z.literal(""))
+      .optional(),
     aadhaarNumber: z.string().regex(aadhaarRegex, "Enter Aadhaar as XXXX XXXX XXXX"),
     panNumber: z
       .string()
@@ -62,7 +63,7 @@ export const addressSchema = z
 
 export const educationSchema = z.object({
   education: z.object({
-    educationalQualification: z.string().min(1, "Educational qualification is required"),
+    educationalQualification: z.string().optional(),
     technicalQualification: z.string().optional(),
   }),
 });
@@ -71,20 +72,28 @@ export const physicalDetailsSchema = z.object({
   additionalDetails: z.object({
     height: z.string().min(1, "Height is required"),
     weight: z.string().min(1, "Weight is required"),
-    eyeSight: z.string().min(1, "Eye sight is required"),
-    eyeColor: z.string().min(1, "Color of eyes is required"),
-    hearing: z.string().min(1, "Hearing is required"),
+    eyeSight: z.string().optional(),
+    eyeColor: z.string().optional(),
+    hearing: z.string().optional(),
   }),
 });
 
 export const employmentPreferencesSchema = z.object({
   additionalDetails: z.object({
     willingToWorkAnywhere: z.boolean(),
-    joiningTimeline: z.string().min(1, "Please specify when you can join"),
+    joiningTimeline: z.string().optional(),
     previousEmployer: z.string().optional(),
-    uanNo: z.string().min(1, "UAN No is required"),
+    uanNo: z.string().optional(),
     esicNumber: z.string().optional(),
-    ifscCode: z.string().regex(ifscRegex, "Enter valid IFSC code"),
+    bankName: z.string().optional(),
+    bankBranchName: z.string().optional(),
+    accountHolderName: z.string().optional(),
+    accountNumber: z.string().optional(),
+    ifscCode: z
+      .string()
+      .regex(ifscRegex, "Enter valid IFSC code")
+      .or(z.literal(""))
+      .optional(),
   }),
 });
 

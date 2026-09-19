@@ -6,10 +6,16 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { APPROVAL_STATUS_SELECT_OPTIONS } from "@/lib/ui/approval-status-filter";
 import type { ListSort } from "@/components/dashboard/use-filtered-list";
+import {
+  REGISTRATION_SEARCH_FIELD_OPTIONS,
+  type RegistrationSearchField,
+} from "@/lib/ui/registration-search";
 
 interface DataListToolbarProps {
   search: string;
   onSearchChange: (value: string) => void;
+  searchField: RegistrationSearchField;
+  onSearchFieldChange: (value: RegistrationSearchField) => void;
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
   sort: ListSort;
@@ -30,9 +36,16 @@ const SORT_OPTIONS = [
   { value: "name", label: "Name A–Z" },
 ];
 
+function placeholderForField(field: RegistrationSearchField): string {
+  const option = REGISTRATION_SEARCH_FIELD_OPTIONS.find((o) => o.value === field);
+  return option ? `Enter ${option.label}` : "Enter search value";
+}
+
 export function DataListToolbar({
   search,
   onSearchChange,
+  searchField,
+  onSearchFieldChange,
   statusFilter,
   onStatusFilterChange,
   sort,
@@ -41,13 +54,31 @@ export function DataListToolbar({
   page,
   pageCount,
   onPageChange,
-  searchPlaceholder = "Search name, ref, or ID",
+  searchPlaceholder,
   showStatusFilter = true,
   showSort = true,
 }: DataListToolbarProps) {
   return (
     <div className="flex flex-col gap-3 border-b border-[#E8EEF5] bg-[#F8FAFC] px-4 py-3 sm:px-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+        <div className="w-full lg:w-56">
+          <label
+            className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#64748B]"
+            htmlFor="list-search-field"
+          >
+            Search By
+          </label>
+          <Select
+            id="list-search-field"
+            value={searchField}
+            onChange={(e) =>
+              onSearchFieldChange(e.target.value as RegistrationSearchField)
+            }
+            options={REGISTRATION_SEARCH_FIELD_OPTIONS}
+            className="h-10 py-0 leading-none"
+            aria-label="Search field"
+          />
+        </div>
         <div className="min-w-0 flex-1">
           <label
             className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#64748B]"
@@ -61,7 +92,7 @@ export function DataListToolbar({
               id="list-search"
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder={searchPlaceholder}
+              placeholder={searchPlaceholder ?? placeholderForField(searchField)}
               className="h-10 py-0 leading-none pl-9"
               aria-label="Search registrations"
             />

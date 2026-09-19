@@ -43,6 +43,8 @@ const PAGE_TITLES: Record<string, string> = {
   users: "Users",
   edit: "Edit",
   generate: "Generate ID Card",
+  "pending-l1": "Pending L1",
+  "pending-l2": "Pending L2",
 };
 
 function currentPageTitle(pathname: string): string {

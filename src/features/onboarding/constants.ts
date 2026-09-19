@@ -35,7 +35,6 @@ export const REQUIRED_DOCUMENTS: DocumentType[] = [
   DocumentType.AADHAAR_FRONT,
   DocumentType.AADHAAR_BACK,
   DocumentType.SIGNATURE,
-  DocumentType.BANK_PASSBOOK,
 ];
 
 export function getRequiredDocuments(options?: {
@@ -92,7 +91,7 @@ export const DOCUMENT_DESCRIPTIONS: Record<DocumentType, string> = {
   [DocumentType.DRIVING_LICENSE]: "Copy of valid driving license (if applicable)",
   [DocumentType.TRAINING_CERTIFICATE]: "Training completion certificate copy",
   [DocumentType.SIGNATURE]: "Signature on white paper (scan or photo)",
-  [DocumentType.BANK_PASSBOOK]: "First page showing name, account number, and IFSC",
+  [DocumentType.BANK_PASSBOOK]: "First page showing name, account number, and IFSC (optional)",
   [DocumentType.EDUCATION_CERTIFICATE]: "Education certificates and marksheets",
   [DocumentType.EXPERIENCE_CERTIFICATE]: "Previous employment / experience certificates",
   [DocumentType.MEDICAL_CERTIFICATE]: "Medical fitness certificate",

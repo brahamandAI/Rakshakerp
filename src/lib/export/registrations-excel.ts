@@ -223,6 +223,10 @@ const COLUMNS: Col[] = [
   { key: "previousEmployer", header: "Previous Employer", get: (r) => r.additionalDetails?.previousEmployer },
   { key: "uanNo", header: "UAN No", get: (r) => r.additionalDetails?.uanNo },
   { key: "esicNumber", header: "ESIC Number", get: (r) => r.additionalDetails?.esicNumber },
+  { key: "bankName", header: "Bank Name", get: (r) => r.additionalDetails?.bankName },
+  { key: "bankBranchName", header: "Bank Branch Name", get: (r) => r.additionalDetails?.bankBranchName },
+  { key: "accountHolderName", header: "Account Holder Name", get: (r) => r.additionalDetails?.accountHolderName },
+  { key: "accountNumber", header: "Account Number", get: (r) => r.additionalDetails?.accountNumber },
   { key: "ifscCode", header: "IFSC Code", get: (r) => r.additionalDetails?.ifscCode },
   {
     key: "drivingLicenseNumber",

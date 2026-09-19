@@ -11,6 +11,10 @@ import { StatusBadge } from "@/features/l1/components/StatusBadge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataListToolbar } from "@/components/dashboard/DataListToolbar";
 import { useFilteredList } from "@/components/dashboard/use-filtered-list";
+import {
+  getRegistrationSearchValue,
+  matchesRegistrationSearch,
+} from "@/lib/ui/registration-search";
 
 interface RegistrationsTableProps {
   registrations: SubmitterRegistrationItem[];
@@ -19,6 +23,7 @@ interface RegistrationsTableProps {
   viewPathPrefix?: string;
   allowSubmitterEdit?: boolean;
   showSubmitter?: boolean;
+  initialStatusFilter?: string;
 }
 
 const EDITABLE = new Set([
@@ -45,27 +50,18 @@ export function RegistrationsTable({
   viewPathPrefix,
   allowSubmitterEdit = false,
   showSubmitter = false,
+  initialStatusFilter = "all",
 }: RegistrationsTableProps) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const list = useFilteredList(
     registrations,
     (row) => row.status,
-    (row) =>
-      [
-        row.applicationRef,
-        row.fullName,
-        row.postAppliedFor,
-        row.employeeId,
-        row.temporaryEmployeeId,
-        row.statusLabel,
-        row.submittedByName,
-        row.submittedByEmail,
-      ]
-        .filter(Boolean)
-        .join(" "),
+    (row, field) => getRegistrationSearchValue(row, field),
     (row) => row.submittedAt,
-    (row) => row.fullName
+    (row) => row.fullName,
+    initialStatusFilter,
+    (row, field, query) => matchesRegistrationSearch(row, field, query)
   );
 
   if (registrations.length === 0) {
@@ -98,6 +94,8 @@ export function RegistrationsTable({
       <DataListToolbar
         search={list.search}
         onSearchChange={list.setSearch}
+        searchField={list.searchField}
+        onSearchFieldChange={list.setSearchField}
         statusFilter={list.statusFilter}
         onStatusFilterChange={list.setStatusFilter}
         sort={list.sort}
@@ -192,7 +190,7 @@ export function RegistrationsTable({
                         <div className="inline-flex items-center gap-2">
                           <Link
                             href={viewHref(row._id)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 text-sm font-medium text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3.5 text-sm font-semibold text-[#1D4ED8] transition hover:-translate-y-px hover:bg-[#DBEAFE]"
                           >
                             <Eye className="h-4 w-4" />
                             View
@@ -202,7 +200,7 @@ export function RegistrationsTable({
                               type="button"
                               disabled={pending}
                               onClick={() => handleEdit(row._id)}
-                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-3 text-sm font-medium text-primary hover:bg-[#F8FAFC] disabled:opacity-50"
+                              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-white px-3.5 text-sm font-semibold text-primary transition hover:-translate-y-px hover:bg-[#F8FAFC] disabled:opacity-50"
                             >
                               <Pencil className="h-4 w-4" />
                               Edit

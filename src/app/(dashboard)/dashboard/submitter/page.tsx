@@ -18,6 +18,7 @@ import {
   DashboardPageHeader,
   DashboardStatCard,
 } from "@/components/dashboard/DashboardUi";
+import { Button } from "@/components/ui/button";
 
 export const metadata = { title: "Registration Submitter Dashboard" };
 
@@ -83,12 +84,11 @@ export default async function SubmitterDashboardPage({ searchParams }: PageProps
         title="New Registration"
         description="Fill the form below. Submitted records appear under All Registrations."
         actions={
-          <Link
-            href="/dashboard/submitter?new=1"
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-b from-[#12325C] to-[#0B1F3A] px-4 text-sm font-semibold text-white shadow-sm transition hover:from-[#1A3F70] hover:to-[#0F2748]"
-          >
-            <Plus className="h-4 w-4" />
-            Start Fresh
+          <Link href="/dashboard/submitter?new=1">
+            <Button>
+              <Plus className="h-4 w-4" />
+              Start Fresh
+            </Button>
           </Link>
         }
       />
@@ -113,6 +113,8 @@ export default async function SubmitterDashboardPage({ searchParams }: PageProps
           title="Pending L1"
           value={stats.pendingL1}
           description="Awaiting L1 review"
+          href="/dashboard/submitter/registrations?status=pending_l1"
+          linkLabel="View pending L1"
           tone="blue"
           icon={Clock3}
         />
@@ -120,6 +122,8 @@ export default async function SubmitterDashboardPage({ searchParams }: PageProps
           title="Pending L2"
           value={stats.pendingL2}
           description="Awaiting L2 approval"
+          href="/dashboard/submitter/registrations?status=pending_l2"
+          linkLabel="View pending L2"
           tone="slate"
           icon={Layers}
         />
@@ -136,6 +140,8 @@ export default async function SubmitterDashboardPage({ searchParams }: PageProps
           title="Approved"
           value={stats.approved}
           description="L2 approved"
+          href="/dashboard/submitter/registrations?status=l2_approved"
+          linkLabel="View approved"
           tone="green"
           icon={CheckCircle2}
         />

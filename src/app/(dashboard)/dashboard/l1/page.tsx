@@ -84,6 +84,8 @@ export default async function L1DashboardPage() {
           title="Returned today"
           value={stats.returnedToday}
           description="Corrections requested today"
+          href="/dashboard/l1/applications/rejected"
+          linkLabel="View reversed"
           tone="slate"
           icon={RotateCcw}
         />

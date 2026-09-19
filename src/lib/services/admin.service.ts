@@ -249,6 +249,25 @@ export async function updateStaffUser(ctx: AdminContext, id: string, data: Parti
     throw new AdminError("Invalid role", "FORBIDDEN");
   }
 
+  if (id === ctx.userId && data.role && data.role !== userToUpdate.role) {
+    throw new AdminError("You cannot change your own role", "FORBIDDEN");
+  }
+
+  if (
+    userToUpdate.role === UserRole.ADMIN &&
+    data.role &&
+    data.role !== UserRole.ADMIN
+  ) {
+    const otherAdmins = await User.countDocuments({
+      role: UserRole.ADMIN,
+      _id: { $ne: userToUpdate._id },
+      isActive: true,
+    });
+    if (otherAdmins === 0) {
+      throw new AdminError("Cannot change the role of the last active admin", "FORBIDDEN");
+    }
+  }
+
   if (data.name !== undefined) userToUpdate.name = data.name;
   if (data.role !== undefined) userToUpdate.role = data.role;
   if (data.department !== undefined) userToUpdate.department = data.department;

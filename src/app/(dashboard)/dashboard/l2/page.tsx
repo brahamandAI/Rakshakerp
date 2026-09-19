@@ -64,6 +64,8 @@ export default async function L2DashboardPage() {
           title="Sent to Admin"
           value={stats.forwarded}
           description={`${stats.approvedThisMonth} this month`}
+          href="/dashboard/l2/applications/approved"
+          linkLabel="View approved"
           tone="slate"
           icon={Send}
         />

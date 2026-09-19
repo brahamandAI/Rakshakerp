@@ -43,6 +43,8 @@ export default async function AdminDashboardPage() {
           title="Pending L1"
           value={regStats.pendingL1}
           description="Awaiting first-level review"
+          href="/dashboard/admin/registrations/pending-l1"
+          linkLabel="View pending L1"
           tone="blue"
           icon={Clock3}
         />
@@ -50,6 +52,8 @@ export default async function AdminDashboardPage() {
           title="Pending L2"
           value={regStats.pendingL2}
           description="Awaiting final approval"
+          href="/dashboard/admin/registrations/pending-l2"
+          linkLabel="View pending L2"
           tone="slate"
           icon={Layers}
         />

@@ -23,9 +23,9 @@ export interface ButtonProps
 
 const variantClasses: Record<NonNullable<ButtonProps["variant"]>, string> = {
   default:
-    "bg-[#0B1F3A] text-white shadow-sm hover:bg-[#12325C] hover:shadow-md",
+    "bg-[#0B1F3A] text-white shadow-[0_8px_20px_-12px_rgba(11,31,58,0.65)] hover:bg-[#12325C] hover:shadow-md",
   accent:
-    "bg-[#D4AF37] text-[#0B1F3A] shadow-sm hover:bg-[#E4C65A] hover:shadow-md",
+    "bg-[#D4AF37] text-[#0B1F3A] shadow-[0_8px_20px_-12px_rgba(212,175,55,0.7)] hover:bg-[#E4C65A] hover:shadow-md",
   sky:
     "bg-[#0284C7] text-white shadow-sm hover:bg-[#0369A1] hover:shadow-md",
   teal:

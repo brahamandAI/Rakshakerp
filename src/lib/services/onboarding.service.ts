@@ -338,6 +338,10 @@ function getStepDataForValidation(formData: EmployeeFormData, step: number): unk
           previousEmployer: formData.additionalDetails.previousEmployer,
           uanNo: formData.additionalDetails.uanNo,
           esicNumber: formData.additionalDetails.esicNumber,
+          bankName: formData.additionalDetails.bankName,
+          bankBranchName: formData.additionalDetails.bankBranchName,
+          accountHolderName: formData.additionalDetails.accountHolderName,
+          accountNumber: formData.additionalDetails.accountNumber,
           ifscCode: formData.additionalDetails.ifscCode,
         },
       };

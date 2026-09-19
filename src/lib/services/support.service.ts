@@ -7,6 +7,10 @@ import { EmployeeStatus } from "@/types/enums";
 import { ADMIN_REGISTRATIONS_FILTER } from "@/lib/services/approval-queue";
 import { DocumentType } from "@/features/onboarding/constants";
 import { toClientProps } from "@/lib/serialize/client-props";
+import {
+  pickSearchableAdditional,
+  pickSearchablePersonal,
+} from "@/lib/ui/registration-search";
 
 export interface IdCardQueueItem {
   _id: string;
@@ -25,6 +29,15 @@ export interface IdCardQueueItem {
   idCardUrl?: string;
   idCardId?: string;
   completedAt?: string;
+  phone?: string;
+  fatherName?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  uanNo?: string;
+  esicNumber?: string;
+  accountNumber?: string;
+  temporaryEmployeeId?: string;
+  employeeId?: string;
 }
 
 function deriveDepartment(postAppliedFor?: string): string {
@@ -54,13 +67,33 @@ function mapEmployee(
   const personal = emp.personalDetails as {
     fullName?: string;
     postAppliedFor?: string;
+    fatherName?: string;
+    fatherOrHusbandName?: string;
+    aadhaarNumber?: string;
+    panNumber?: string;
   } | undefined;
+  const additional = emp.additionalDetails as {
+    uanNo?: string;
+    esicNumber?: string;
+    accountNumber?: string;
+  } | undefined;
+  const searchablePersonal = pickSearchablePersonal(personal);
+  const searchableAdditional = pickSearchableAdditional(additional);
 
   return toClientProps({
     _id: String(emp._id),
     applicationRef: String(emp.applicationRef),
-    employeeIdCode: String(emp.employeeId),
+    employeeIdCode: String(emp.employeeId ?? emp.temporaryEmployeeId ?? ""),
+    employeeId: emp.employeeId as string | undefined,
+    temporaryEmployeeId: emp.temporaryEmployeeId as string | undefined,
     fullName: personal?.fullName ?? "Unknown",
+    phone: String(emp.phone ?? ""),
+    fatherName: searchablePersonal.fatherName || undefined,
+    aadhaarNumber: searchablePersonal.aadhaarNumber || undefined,
+    panNumber: searchablePersonal.panNumber || undefined,
+    uanNo: searchableAdditional.uanNo || undefined,
+    esicNumber: searchableAdditional.esicNumber || undefined,
+    accountNumber: searchableAdditional.accountNumber || undefined,
     designation: personal?.postAppliedFor,
     postAppliedFor: personal?.postAppliedFor,
     department: (card as { department?: string } | undefined)?.department,

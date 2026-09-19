@@ -17,6 +17,10 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataListToolbar } from "@/components/dashboard/DataListToolbar";
 import { useFilteredList } from "@/components/dashboard/use-filtered-list";
+import {
+  getRegistrationSearchValue,
+  matchesRegistrationSearch,
+} from "@/lib/ui/registration-search";
 
 interface L2ApplicationTableProps {
   applications: ApplicationListItem[];
@@ -48,12 +52,11 @@ export function L2ApplicationTable({
   const list = useFilteredList(
     applications,
     (app) => app.status,
-    (app) =>
-      [app.applicationRef, app.fullName, app.postAppliedFor, app.l1ApprovedByName, app.submittedByName, app.submittedByEmail]
-        .filter(Boolean)
-        .join(" "),
+    (app, field) => getRegistrationSearchValue(app, field),
     (app) => app.l1ApprovedAt ?? app.submittedAt,
-    (app) => app.fullName
+    (app) => app.fullName,
+    "all",
+    (app, field, query) => matchesRegistrationSearch(app, field, query)
   );
 
   async function handleApprove(employeeId: string) {
@@ -144,6 +147,8 @@ export function L2ApplicationTable({
         <DataListToolbar
           search={list.search}
           onSearchChange={list.setSearch}
+          searchField={list.searchField}
+          onSearchFieldChange={list.setSearchField}
           statusFilter={list.statusFilter}
           onStatusFilterChange={list.setStatusFilter}
           sort={list.sort}
@@ -226,7 +231,7 @@ export function L2ApplicationTable({
                         <Link
                           href={`${viewPathPrefix}/${app._id}`}
                           prefetch
-                          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-[#BFDBFE] bg-[#EFF6FF] px-3 text-sm font-medium leading-none text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] px-3.5 text-sm font-semibold text-[#1D4ED8] transition hover:-translate-y-px hover:bg-[#DBEAFE]"
                         >
                           <Eye className="h-3.5 w-3.5 shrink-0" />
                           View

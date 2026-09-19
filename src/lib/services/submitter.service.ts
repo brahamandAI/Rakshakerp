@@ -7,6 +7,10 @@ import {
   getRegistrationStatusLabel,
 } from "@/features/application-status/constants";
 import { toClientProps } from "@/lib/serialize/client-props";
+import {
+  pickSearchableAdditional,
+  pickSearchablePersonal,
+} from "@/lib/ui/registration-search";
 
 export interface SubmitterRegistrationItem {
   _id: string;
@@ -20,6 +24,12 @@ export interface SubmitterRegistrationItem {
   submittedAt?: string;
   temporaryEmployeeId?: string;
   employeeId?: string;
+  fatherName?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  uanNo?: string;
+  esicNumber?: string;
+  accountNumber?: string;
   forwardedToAdminAt?: string;
   rejectionComment?: string;
   submittedByName?: string;
@@ -28,8 +38,24 @@ export interface SubmitterRegistrationItem {
 
 function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationItem {
   const personal = emp.personalDetails as
-    | { fullName?: string; postAppliedFor?: string }
+    | {
+        fullName?: string;
+        postAppliedFor?: string;
+        fatherName?: string;
+        fatherOrHusbandName?: string;
+        aadhaarNumber?: string;
+        panNumber?: string;
+      }
     | undefined;
+  const additional = emp.additionalDetails as
+    | {
+        uanNo?: string;
+        esicNumber?: string;
+        accountNumber?: string;
+      }
+    | undefined;
+  const searchablePersonal = pickSearchablePersonal(personal);
+  const searchableAdditional = pickSearchableAdditional(additional);
   const temporaryEmployeeId = emp.temporaryEmployeeId as string | undefined;
   const status = emp.status as EmployeeStatus;
   const rejectionComment =
@@ -66,6 +92,12 @@ function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationIte
       : undefined,
     temporaryEmployeeId,
     employeeId: emp.employeeId as string | undefined,
+    fatherName: searchablePersonal.fatherName || undefined,
+    aadhaarNumber: searchablePersonal.aadhaarNumber || undefined,
+    panNumber: searchablePersonal.panNumber || undefined,
+    uanNo: searchableAdditional.uanNo || undefined,
+    esicNumber: searchableAdditional.esicNumber || undefined,
+    accountNumber: searchableAdditional.accountNumber || undefined,
     forwardedToAdminAt: emp.forwardedToAdminAt
       ? new Date(emp.forwardedToAdminAt as Date).toISOString()
       : undefined,
@@ -182,4 +214,17 @@ export async function getAdminRegistrationStats() {
     Employee.countDocuments({ status: EmployeeStatus.L2_REVIEW }),
   ]);
   return { completed, pendingL1, pendingL2 };
+}
+
+export async function getAdminQueueRegistrations(
+  statuses: EmployeeStatus[]
+): Promise<SubmitterRegistrationItem[]> {
+  await connectDB();
+  const items = await Employee.find({ status: { $in: statuses } })
+    .populate("submittedBy", "name email")
+    .sort({ submittedAt: -1, updatedAt: -1 })
+    .limit(200)
+    .lean();
+
+  return items.map(mapRegistration);
 }

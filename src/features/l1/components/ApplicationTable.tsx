@@ -8,6 +8,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DataListToolbar } from "@/components/dashboard/DataListToolbar";
 import { useFilteredList } from "@/components/dashboard/use-filtered-list";
 import { EmployeeStatus } from "@/types/enums";
+import {
+  getRegistrationSearchValue,
+  matchesRegistrationSearch,
+} from "@/lib/ui/registration-search";
 
 interface ApplicationTableProps {
   applications: ApplicationListItem[];
@@ -26,7 +30,7 @@ const L1_EDITABLE = new Set<EmployeeStatus>([
 ]);
 
 const ACTION_BTN =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium leading-none";
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border px-3.5 text-sm font-semibold leading-tight transition-all duration-200 hover:-translate-y-px";
 
 function formatDate(iso?: string) {
   if (!iso) return "—";
@@ -48,12 +52,11 @@ export function ApplicationTable({
   const list = useFilteredList(
     applications,
     (app) => app.status,
-    (app) =>
-      [app.applicationRef, app.fullName, app.postAppliedFor, app.employeeId, app.submittedByName, app.submittedByEmail]
-        .filter(Boolean)
-        .join(" "),
+    (app, field) => getRegistrationSearchValue(app, field),
     (app) => app.submittedAt ?? app.l1ApprovedAt,
-    (app) => app.fullName
+    (app) => app.fullName,
+    "all",
+    (app, field, query) => matchesRegistrationSearch(app, field, query)
   );
 
   const isL1Table = viewPathPrefix.startsWith("/dashboard/l1");
@@ -75,7 +78,7 @@ export function ApplicationTable({
         <Link
           href={`${viewPathPrefix}/${app._id}`}
           prefetch
-          className={`${ACTION_BTN} border-[#BFDBFE] bg-[#EFF6FF] text-[#1D4ED8] transition hover:bg-[#DBEAFE] ${
+          className={`${ACTION_BTN} border-[#BFDBFE] bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE] hover:shadow-sm ${
             fullWidth ? "h-9 flex-1" : ""
           }`}
         >
@@ -103,6 +106,8 @@ export function ApplicationTable({
       <DataListToolbar
         search={list.search}
         onSearchChange={list.setSearch}
+        searchField={list.searchField}
+        onSearchFieldChange={list.setSearchField}
         statusFilter={list.statusFilter}
         onStatusFilterChange={list.setStatusFilter}
         sort={list.sort}

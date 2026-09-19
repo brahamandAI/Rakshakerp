@@ -3,6 +3,10 @@
 import { useMemo, useState } from "react";
 import { EmployeeStatus } from "@/types/enums";
 import { matchesApprovalStatusFilter } from "@/lib/ui/approval-status-filter";
+import {
+  DEFAULT_REGISTRATION_SEARCH_FIELD,
+  type RegistrationSearchField,
+} from "@/lib/ui/registration-search";
 
 export type ListSort = "default" | "name" | "newest" | "oldest";
 
@@ -11,21 +15,31 @@ const PAGE_SIZE = 10;
 export function useFilteredList<T>(
   items: T[],
   getStatus: (item: T) => EmployeeStatus,
-  getSearchText: (item: T) => string,
+  getSearchText: (item: T, field: RegistrationSearchField) => string,
   getDate?: (item: T) => string | undefined,
-  getName?: (item: T) => string
+  getName?: (item: T) => string,
+  initialStatusFilter = "all",
+  matchesSearch?: (
+    item: T,
+    field: RegistrationSearchField,
+    query: string
+  ) => boolean
 ) {
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchField, setSearchField] = useState<RegistrationSearchField>(
+    DEFAULT_REGISTRATION_SEARCH_FIELD
+  );
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
   const [sort, setSort] = useState<ListSort>("default");
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     let next = items.filter((item) => {
       if (!matchesApprovalStatusFilter(getStatus(item), statusFilter)) return false;
       if (!q) return true;
-      return getSearchText(item).toLowerCase().includes(q);
+      if (matchesSearch) return matchesSearch(item, searchField, q);
+      return getSearchText(item, searchField).toLowerCase().includes(q.toLowerCase());
     });
 
     if (sort === "name" && getName) {
@@ -45,7 +59,7 @@ export function useFilteredList<T>(
     return next;
     // Intentional: getters are stable per call-site shape, not identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, search, statusFilter, sort]);
+  }, [items, search, searchField, statusFilter, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
@@ -53,6 +67,11 @@ export function useFilteredList<T>(
 
   function updateSearch(value: string) {
     setSearch(value);
+    setPage(1);
+  }
+
+  function updateSearchField(value: RegistrationSearchField) {
+    setSearchField(value);
     setPage(1);
   }
 
@@ -68,6 +87,7 @@ export function useFilteredList<T>(
 
   return {
     search,
+    searchField,
     statusFilter,
     sort,
     page: safePage,
@@ -76,6 +96,7 @@ export function useFilteredList<T>(
     total: filtered.length,
     rows: paged,
     setSearch: updateSearch,
+    setSearchField: updateSearchField,
     setStatusFilter: updateStatus,
     setSort: updateSort,
     setPage,

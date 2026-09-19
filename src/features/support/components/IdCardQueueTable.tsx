@@ -13,6 +13,10 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { DataListToolbar } from "@/components/dashboard/DataListToolbar";
 import { useFilteredList } from "@/components/dashboard/use-filtered-list";
+import {
+  getRegistrationSearchValue,
+  matchesRegistrationSearch,
+} from "@/lib/ui/registration-search";
 
 interface IdCardQueueTableProps {
   items: IdCardQueueItem[];
@@ -45,12 +49,11 @@ export function IdCardQueueTable({
   const list = useFilteredList(
     items,
     (item) => item.status,
-    (item) =>
-      [item.employeeIdCode, item.fullName, item.designation, item.department, item.branch]
-        .filter(Boolean)
-        .join(" "),
+    (item, field) => getRegistrationSearchValue(item, field),
     (item) => item.forwardedToSupportAt ?? item.completedAt,
-    (item) => item.fullName
+    (item) => item.fullName,
+    "all",
+    (item, field, query) => matchesRegistrationSearch(item, field, query)
   );
 
   if (items.length === 0) {
@@ -68,6 +71,8 @@ export function IdCardQueueTable({
       <DataListToolbar
         search={list.search}
         onSearchChange={list.setSearch}
+        searchField={list.searchField}
+        onSearchFieldChange={list.setSearchField}
         statusFilter={list.statusFilter}
         onStatusFilterChange={list.setStatusFilter}
         sort={list.sort}
@@ -76,7 +81,6 @@ export function IdCardQueueTable({
         page={list.page}
         pageCount={list.pageCount}
         onPageChange={list.setPage}
-        searchPlaceholder="Search name or employee ID"
       />
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-sm">

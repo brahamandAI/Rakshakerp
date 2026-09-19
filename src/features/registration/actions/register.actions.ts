@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/db/connect";
 import { Employee } from "@/lib/db/models/Employee";
 import { EmployeeStatus, UserRole } from "@/types/enums";
 import { generateApplicationRef } from "@/lib/utils";
+import { z } from "zod";
 import { applySchema } from "@/features/registration/schemas/apply.schema";
 import {
   createEmployeeSession,
@@ -106,7 +107,11 @@ export async function registerAndSaveStep1Action(
   contact: { fullName: string; email: string; phone: string },
   stepData: Record<string, unknown>
 ): Promise<RegisterResult> {
-  const parsed = applySchema.safeParse(contact);
+  const parsed = applySchema
+    .extend({
+      email: z.string().email("Enter a valid email").or(z.literal("")),
+    })
+    .safeParse(contact);
 
   if (!parsed.success) {
     return {
@@ -131,19 +136,21 @@ export async function registerAndSaveStep1Action(
 
   const email = parsed.data.email.toLowerCase();
 
-  const activeApplication = await Employee.findOne({
-    email,
-    status: {
-      $nin: [EmployeeStatus.REJECTED, EmployeeStatus.ID_CARD_ISSUED],
-    },
-  }).lean();
+  if (email) {
+    const activeApplication = await Employee.findOne({
+      email,
+      status: {
+        $nin: [EmployeeStatus.REJECTED, EmployeeStatus.ID_CARD_ISSUED],
+      },
+    }).lean();
 
-  if (activeApplication) {
-    return {
-      success: false,
-      error:
-        "An active application already exists for this email. Please return to the registration page to continue.",
-    };
+    if (activeApplication) {
+      return {
+        success: false,
+        error:
+          "An active application already exists for this email. Please return to the registration page to continue.",
+      };
+    }
   }
 
   const applicationRef = generateApplicationRef();

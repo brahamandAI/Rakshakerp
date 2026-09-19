@@ -11,6 +11,7 @@ export interface PersonalDetails {
   siteName?: string;
   dateOfJoining?: string;
   postAppliedFor?: string;
+  designationCode?: string;
   fullName?: string;
   fatherName?: string;
   motherName?: string;
@@ -21,21 +22,44 @@ export interface PersonalDetails {
   aadhaarNumber?: string;
   panNumber?: string;
   identificationMarks?: string;
+  /** Sex code for payroll export: M / F / O */
+  gender?: string;
+  department?: string;
+  division?: string;
+  dateOfLeaving?: string;
+  employeeType?: string;
+  oldEmpId?: string;
   /** @deprecated legacy field */
   fatherOrHusbandName?: string;
-  gender?: string;
   nationality?: string;
   religion?: string;
   alternatePhone?: string;
+}
+
+export interface StructuredAddressPart {
+  landmark?: string;
+  village?: string;
+  postOffice?: string;
+  taluka?: string;
+  policeStation?: string;
+  state?: string;
+  district?: string;
+  pincode?: string;
+  dateSinceResiding?: string;
+  periodOfStay?: string;
+  phone?: string;
+  /** @deprecated legacy */
+  houseNo?: string;
+  street?: string;
+  villageOrCity?: string;
 }
 
 export interface AddressDetails {
   localAddress?: string;
   permanentAddress?: string;
   sameAsPresent?: boolean;
-  /** @deprecated legacy structured address */
-  present?: Record<string, string>;
-  permanent?: Record<string, string>;
+  present?: StructuredAddressPart;
+  permanent?: StructuredAddressPart;
 }
 
 export interface EducationDetails {
@@ -114,6 +138,10 @@ export interface AdditionalDetails {
   previousEmployer?: string;
   uanNo?: string;
   esicNumber?: string;
+  bankName?: string;
+  bankBranchName?: string;
+  accountHolderName?: string;
+  accountNumber?: string;
   ifscCode?: string;
   drivingLicenseNumber?: string;
   drivingLicenseValidityDate?: string;
