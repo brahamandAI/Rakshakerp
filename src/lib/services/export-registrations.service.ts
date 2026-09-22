@@ -98,7 +98,11 @@ async function fetchDocumentsByEmployee(
   return map;
 }
 
-async function fetchForScope(scope: ExportScope, userId: string) {
+async function fetchForScope(
+  scope: ExportScope,
+  userId: string,
+  employeeId?: string
+) {
   await connectDB();
 
   const populate = [
@@ -106,6 +110,30 @@ async function fetchForScope(scope: ExportScope, userId: string) {
     { path: "l1Decision.decidedBy", select: "name" },
     { path: "l2Decision.decidedBy", select: "name" },
   ];
+
+  if (employeeId) {
+    if (!mongoose.Types.ObjectId.isValid(employeeId)) {
+      throw new Error("Invalid employee id");
+    }
+    const item = await Employee.findById(employeeId).populate(populate).lean();
+    if (!item) throw new Error("Registration not found");
+
+    const emp = item as unknown as Record<string, unknown>;
+    const status = emp.status as EmployeeStatus;
+    const l1Action = (emp.l1Decision as { action?: string } | undefined)?.action;
+
+    if (status === EmployeeStatus.DRAFT) {
+      throw new Error("Forbidden");
+    }
+
+    if (scope === "l2" && l1Action !== "APPROVE") {
+      throw new Error("Forbidden");
+    }
+
+    // userId reserved for future per-approver scoping
+    void userId;
+    return [item];
+  }
 
   if (scope === "l1") {
     const items = await Employee.find({
@@ -120,6 +148,8 @@ async function fetchForScope(scope: ExportScope, userId: string) {
               EmployeeStatus.L2_REVIEW,
               EmployeeStatus.APPROVED,
               EmployeeStatus.ID_GENERATED,
+              EmployeeStatus.SUBMITTED,
+              EmployeeStatus.L1_REVIEW,
             ],
           },
         },
@@ -167,14 +197,18 @@ async function mapWithDocuments(items: Record<string, unknown>[]) {
 
 export async function exportRegistrationsExcel(
   scope: ExportScope,
-  userId: string
+  userId: string,
+  options?: { employeeId?: string }
 ): Promise<{ filename: string; xml: string; count: number }> {
-  const items = await fetchForScope(scope, userId);
+  const items = await fetchForScope(scope, userId, options?.employeeId);
   const rows = await mapWithDocuments(items as unknown as Record<string, unknown>[]);
   const xml = buildRegistrationsExcelXml(rows);
   const date = new Date().toISOString().slice(0, 10);
+  const single = options?.employeeId
+    ? `-${String((rows[0]?.applicationRef as string | undefined) ?? options.employeeId).replace(/[^\w-]/g, "")}`
+    : "";
   return {
-    filename: `registrations-${scope}-${date}.xls`,
+    filename: `empdetails-${scope}${single}-${date}.xls`,
     xml,
     count: rows.length,
   };
@@ -182,16 +216,17 @@ export async function exportRegistrationsExcel(
 
 export async function previewRegistrationsExport(
   scope: ExportScope,
-  userId: string
+  userId: string,
+  options?: { employeeId?: string }
 ): Promise<{
   count: number;
   columns: string[];
   rows: Record<string, string>[];
 }> {
   const { getExportPreviewRows } = await import("@/lib/export/registrations-excel");
-  const items = await fetchForScope(scope, userId);
+  const items = await fetchForScope(scope, userId, options?.employeeId);
   const mapped = await mapWithDocuments(items as unknown as Record<string, unknown>[]);
-  return getExportPreviewRows(mapped, 25);
+  return getExportPreviewRows(mapped, options?.employeeId ? 1 : 25);
 }
 
 export function assertExportRole(role: string, scope: ExportScope) {

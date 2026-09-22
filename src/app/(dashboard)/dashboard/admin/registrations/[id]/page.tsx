@@ -4,6 +4,7 @@ import { UserRole } from "@/types/enums";
 import { getEmployeeDetailForReview } from "@/lib/services/approval.service";
 import { RegistrationDetailReadOnly } from "@/features/submitter/components/RegistrationDetailReadOnly";
 import { DashboardBackLink } from "@/components/dashboard/DashboardBackLink";
+import { DownloadExcelButton } from "@/features/export/components/DownloadExcelButton";
 import {
   clientHistoryItems,
   serializeRegistrationDocuments,
@@ -25,7 +26,14 @@ export default async function AdminRegistrationDetailPage({ params }: PageProps)
   const { employee, documents, history } = data;
   return (
     <div className="space-y-4">
-      <DashboardBackLink href="/dashboard/admin/registrations" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <DashboardBackLink href="/dashboard/admin/registrations" />
+        <DownloadExcelButton
+          scope="admin"
+          employeeId={String(employee._id)}
+          label="Download Excel"
+        />
+      </div>
       <RegistrationDetailReadOnly
         employeeId={String(employee._id)}
         showDocumentsFolder

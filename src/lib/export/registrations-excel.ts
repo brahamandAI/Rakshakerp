@@ -1,55 +1,4 @@
-/** Flatten registration records into Excel-friendly rows and build an .xls (SpreadsheetML) file. */
-
-function cell(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function flattenValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "";
-  if (Array.isArray(value)) {
-    return value
-      .map((item, idx) => {
-        if (item && typeof item === "object") {
-          return Object.entries(item as Record<string, unknown>)
-            .filter(([, v]) => v !== undefined && v !== null && v !== "")
-            .map(([k, v]) => `${k}: ${cell(v)}`)
-            .join("; ");
-        }
-        return `${idx + 1}: ${cell(item)}`;
-      })
-      .filter(Boolean)
-      .join(" | ");
-  }
-  if (typeof value === "object") {
-    return Object.entries(value as Record<string, unknown>)
-      .filter(([, v]) => v !== undefined && v !== null && v !== "")
-      .map(([k, v]) => `${k}: ${cell(v)}`)
-      .join("; ");
-  }
-  return cell(value);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function arrayItem(arr: unknown[] | undefined, index: number): Record<string, unknown> {
-  return asRecord(arr?.[index]);
-}
+/** Payroll Sampleempdetails.xlsx-compatible Excel export (SpreadsheetML .xls). */
 
 export type RegistrationExportSource = {
   applicationRef?: string;
@@ -102,169 +51,376 @@ type Col = {
   get: (r: RegistrationExportSource) => unknown;
 };
 
-function familyCols(max = 6): Col[] {
-  const cols: Col[] = [];
-  for (let i = 0; i < max; i++) {
-    const n = i + 1;
-    cols.push(
-      {
-        key: `family${n}Name`,
-        header: `Family ${n} Name`,
-        get: (r) => arrayItem(r.familyDetails, i).name,
-      },
-      {
-        key: `family${n}Relationship`,
-        header: `Family ${n} Relationship`,
-        get: (r) => arrayItem(r.familyDetails, i).relationship,
-      },
-      {
-        key: `family${n}Dob`,
-        header: `Family ${n} Date of Birth`,
-        get: (r) => arrayItem(r.familyDetails, i).dateOfBirth,
-      },
-      {
-        key: `family${n}Aadhaar`,
-        header: `Family ${n} Aadhaar`,
-        get: (r) => arrayItem(r.familyDetails, i).aadhaarNumber,
-      }
-    );
-  }
-  return cols;
+function cell(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }
 
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function flattenValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "object") return cell(value);
+  return cell(value);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function str(value: unknown): string {
+  return value == null ? "" : String(value).trim();
+}
+
+/** Convert HTML/ISO dates to YYYY/MM/DD for payroll sample format. */
+export function formatPayrollDate(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}/${iso[2]}/${iso[3]}`;
+  const slash = raw.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (slash) return raw.slice(0, 10);
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}/${m}/${day}`;
+  }
+  return raw;
+}
+
+function digitsOnly(value: unknown): string {
+  return str(value).replace(/\D/g, "");
+}
+
+function maritalCode(value: unknown): string {
+  const v = str(value).toUpperCase();
+  if (v === "SINGLE" || v === "S") return "S";
+  if (v === "MARRIED" || v === "M") return "M";
+  if (v === "WIDOWED" || v === "WIDOW" || v === "W") return "W";
+  return v;
+}
+
+function sexCode(value: unknown): string {
+  const v = str(value).toUpperCase();
+  if (v === "MALE") return "M";
+  if (v === "FEMALE") return "F";
+  if (v === "M" || v === "F" || v === "O") return v;
+  return v;
+}
+
+function yesNo(value: unknown, fallbackWhenNumber?: string): string {
+  const v = str(value).toUpperCase();
+  if (v === "YES" || v === "Y" || v === "TRUE") return "YES";
+  if (v === "NO" || v === "N" || v === "FALSE") return "NO";
+  if (!v && fallbackWhenNumber) return fallbackWhenNumber;
+  return v;
+}
+
+function addressPart(
+  r: RegistrationExportSource,
+  which: "present" | "permanent"
+): Record<string, unknown> {
+  const addr = asRecord(r.address);
+  const part = asRecord(addr[which]);
+  if (Object.keys(part).length > 0) {
+    if (!part.village && part.villageOrCity) part.village = part.villageOrCity;
+    return part;
+  }
+  // Fallback: put free-text summary into landmark so export is not blank
+  const summary =
+    which === "present" ? str(addr.localAddress) : str(addr.permanentAddress);
+  return summary ? { landmark: summary } : {};
+}
+
+function present(r: RegistrationExportSource) {
+  return addressPart(r, "present");
+}
+
+function permanent(r: RegistrationExportSource) {
+  const addr = asRecord(r.address);
+  if (addr.sameAsPresent) return addressPart(r, "present");
+  return addressPart(r, "permanent");
+}
+
+/** Exact Sampleempdetails.xlsx column order / headers. */
 const COLUMNS: Col[] = [
-  { key: "applicationRef", header: "Application Ref", get: (r) => r.applicationRef },
-  { key: "status", header: "Status", get: (r) => r.status },
-  { key: "employeeId", header: "Employee ID", get: (r) => r.employeeId },
-  { key: "temporaryEmployeeId", header: "Temporary Employee ID", get: (r) => r.temporaryEmployeeId },
-  { key: "submittedBy", header: "Submitted By", get: (r) => r.submittedBy?.name },
-  { key: "submittedByEmail", header: "Submitter Email", get: (r) => r.submittedBy?.email },
-  { key: "submittedAt", header: "Submitted At", get: (r) => r.submittedAt },
-  { key: "l1Action", header: "L1 Action", get: (r) => r.l1Decision?.action },
-  { key: "l1ApprovedBy", header: "L1 Approved By", get: (r) => r.l1Decision?.approvedByName || r.l1Decision?.decidedBy?.name },
-  { key: "l1ApprovedAt", header: "L1 Approved At", get: (r) => r.l1ApprovedAt ?? r.l1Decision?.decidedAt },
-  { key: "l1Comment", header: "L1 Comment", get: (r) => r.l1Decision?.comment },
-  { key: "l2Action", header: "L2 Action", get: (r) => r.l2Decision?.action },
-  { key: "l2ApprovedBy", header: "L2 Decision By", get: (r) => r.l2Decision?.decidedBy?.name },
-  { key: "l2DecidedAt", header: "L2 Decided At", get: (r) => r.l2Decision?.decidedAt },
-  { key: "l2Comment", header: "L2 Comment", get: (r) => r.l2Decision?.comment },
-  { key: "approvedAt", header: "Approved At", get: (r) => r.approvedAt },
-  { key: "idGeneratedAt", header: "ID Generated At", get: (r) => r.idGeneratedAt },
-  { key: "forwardedToAdminAt", header: "Forwarded To Admin At", get: (r) => r.forwardedToAdminAt },
-  { key: "correctionNotes", header: "Correction / Reverse Notes", get: (r) => r.correctionNotes },
-  { key: "rejectionReason", header: "Rejection Reason", get: (r) => r.rejectionReason },
-  { key: "email", header: "Email", get: (r) => r.email },
-  { key: "phone", header: "Phone", get: (r) => r.phone },
-  { key: "branchName", header: "Branch Name", get: (r) => r.personalDetails?.branchName },
-  { key: "clientId", header: "Client ID", get: (r) => r.personalDetails?.clientId },
-  { key: "clientName", header: "Client Name", get: (r) => r.personalDetails?.clientName },
-  { key: "siteName", header: "Site Name", get: (r) => r.personalDetails?.siteName },
-  { key: "dateOfJoining", header: "Date of Joining", get: (r) => r.personalDetails?.dateOfJoining },
-  { key: "postAppliedFor", header: "Post Applied For", get: (r) => r.personalDetails?.postAppliedFor },
-  { key: "fullName", header: "Full Name", get: (r) => r.personalDetails?.fullName },
-  { key: "fatherName", header: "Father Name", get: (r) => r.personalDetails?.fatherName },
-  { key: "motherName", header: "Mother Name", get: (r) => r.personalDetails?.motherName },
-  { key: "spouseOrNok", header: "Spouse Name", get: (r) => r.personalDetails?.spouseOrNok },
-  { key: "dateOfBirth", header: "Date of Birth", get: (r) => r.personalDetails?.dateOfBirth },
-  { key: "maritalStatus", header: "Marital Status", get: (r) => r.personalDetails?.maritalStatus },
-  { key: "bloodGroup", header: "Blood Group", get: (r) => r.personalDetails?.bloodGroup },
-  { key: "aadhaarNumber", header: "Aadhaar Number", get: (r) => r.personalDetails?.aadhaarNumber },
-  { key: "panNumber", header: "PAN Number", get: (r) => r.personalDetails?.panNumber },
-  { key: "identificationMarks", header: "Identification Marks", get: (r) => r.personalDetails?.identificationMarks },
-  { key: "localAddress", header: "Local Address", get: (r) => r.address?.localAddress },
-  { key: "sameAsPresent", header: "Permanent Same As Local", get: (r) => r.address?.sameAsPresent },
-  { key: "permanentAddress", header: "Permanent Address", get: (r) => r.address?.permanentAddress },
   {
-    key: "educationalQualification",
-    header: "Educational Qualification",
-    get: (r) => r.education?.educationalQualification,
+    key: "IDNO",
+    header: "IDNO",
+    get: (r) => r.employeeId || r.temporaryEmployeeId || "",
   },
   {
-    key: "technicalQualification",
-    header: "Technical Qualification",
-    get: (r) => r.education?.technicalQualification,
-  },
-  { key: "ref1Name", header: "Reference 1 Name", get: (r) => arrayItem(r.references, 0).name },
-  { key: "ref1Phone", header: "Reference 1 Phone", get: (r) => arrayItem(r.references, 0).phone },
-  { key: "ref1Address", header: "Reference 1 Address", get: (r) => arrayItem(r.references, 0).address },
-  { key: "ref2Name", header: "Reference 2 Name", get: (r) => arrayItem(r.references, 1).name },
-  { key: "ref2Phone", header: "Reference 2 Phone", get: (r) => arrayItem(r.references, 1).phone },
-  { key: "ref2Address", header: "Reference 2 Address", get: (r) => arrayItem(r.references, 1).address },
-  ...familyCols(6),
-  { key: "nomineeName", header: "Nominee Name", get: (r) => r.nominee?.name },
-  { key: "nomineeRelationship", header: "Nominee Relationship", get: (r) => r.nominee?.relationship },
-  { key: "nomineeDob", header: "Nominee Date of Birth", get: (r) => r.nominee?.dateOfBirth },
-  { key: "nomineeAadhaar", header: "Nominee Aadhaar", get: (r) => r.nominee?.aadhaarNumber },
-  { key: "isExServiceman", header: "Is Ex-Serviceman", get: (r) => r.exServiceman?.isExServiceman },
-  {
-    key: "armedForcesBranch",
-    header: "Armed Forces Branch",
-    get: (r) => r.exServiceman?.armedForcesBranch,
-  },
-  { key: "exRank", header: "Ex-Serviceman Rank", get: (r) => r.exServiceman?.rank },
-  { key: "serviceNumber", header: "Service Number", get: (r) => r.exServiceman?.serviceNumber },
-  { key: "dateOfDischarge", header: "Date of Discharge", get: (r) => r.exServiceman?.dateOfDischarge },
-  { key: "unitLastServed", header: "Unit Last Served", get: (r) => r.exServiceman?.unitLastServed },
-  { key: "isGunman", header: "Is Gunman", get: (r) => r.gunman?.isGunman },
-  { key: "gunNumber", header: "Gun Number", get: (r) => r.gunman?.gunNumber },
-  { key: "gunLicenseNumber", header: "Gun License Number", get: (r) => r.gunman?.licenseNumber },
-  { key: "gunLicenseValidUpto", header: "Gun License Valid Upto", get: (r) => r.gunman?.licenseValidUpto },
-  { key: "height", header: "Height", get: (r) => r.additionalDetails?.height },
-  { key: "weight", header: "Weight", get: (r) => r.additionalDetails?.weight },
-  { key: "eyeSight", header: "Eye Sight", get: (r) => r.additionalDetails?.eyeSight },
-  { key: "eyeColor", header: "Eye Color", get: (r) => r.additionalDetails?.eyeColor },
-  { key: "hearing", header: "Hearing", get: (r) => r.additionalDetails?.hearing },
-  {
-    key: "willingToWorkAnywhere",
-    header: "Willing To Work Anywhere",
-    get: (r) => r.additionalDetails?.willingToWorkAnywhere,
-  },
-  { key: "joiningTimeline", header: "Joining Timeline", get: (r) => r.additionalDetails?.joiningTimeline },
-  { key: "previousEmployer", header: "Previous Employer", get: (r) => r.additionalDetails?.previousEmployer },
-  { key: "uanNo", header: "UAN No", get: (r) => r.additionalDetails?.uanNo },
-  { key: "esicNumber", header: "ESIC Number", get: (r) => r.additionalDetails?.esicNumber },
-  { key: "bankName", header: "Bank Name", get: (r) => r.additionalDetails?.bankName },
-  { key: "bankBranchName", header: "Bank Branch Name", get: (r) => r.additionalDetails?.bankBranchName },
-  { key: "accountHolderName", header: "Account Holder Name", get: (r) => r.additionalDetails?.accountHolderName },
-  { key: "accountNumber", header: "Account Number", get: (r) => r.additionalDetails?.accountNumber },
-  { key: "ifscCode", header: "IFSC Code", get: (r) => r.additionalDetails?.ifscCode },
-  {
-    key: "drivingLicenseNumber",
-    header: "Driving License No",
-    get: (r) => r.additionalDetails?.drivingLicenseNumber,
+    key: "Employee Name",
+    header: "Employee Name",
+    get: (r) => r.personalDetails?.fullName,
   },
   {
-    key: "drivingLicenseValidityDate",
-    header: "DL Validity",
-    get: (r) => r.additionalDetails?.drivingLicenseValidityDate,
-  },
-  {
-    key: "trainingCertificateUpload",
-    header: "Training Certificate",
-    get: (r) => r.additionalDetails?.trainingCertificateUpload,
-  },
-  { key: "declarationAgreed", header: "Declaration Agreed", get: (r) => r.declaration?.agreed },
-  {
-    key: "policeVerificationAccepted",
-    header: "Police Verification Accepted",
-    get: (r) => r.declaration?.policeVerificationAccepted,
-  },
-  { key: "declarationPlace", header: "Declaration Place", get: (r) => r.declaration?.place },
-  { key: "declarationSignedAt", header: "Declaration Signed At", get: (r) => r.declaration?.signedAt },
-  {
-    key: "hasLiveSignature",
-    header: "Live Signature Provided",
+    key: "Fathers Name",
+    header: "Fathers Name",
     get: (r) =>
-      typeof r.declaration?.signatureDataUrl === "string" &&
-      (r.declaration.signatureDataUrl as string).startsWith("data:image/")
-        ? "Yes"
-        : "No",
+      r.personalDetails?.fatherName || r.personalDetails?.fatherOrHusbandName,
   },
-  { key: "documentsSummary", header: "Uploaded Documents", get: (r) => r.documentsSummary },
-  { key: "documentFileNames", header: "Document File Names", get: (r) => r.documentFileNames },
-  { key: "documentUrls", header: "Document URLs", get: (r) => r.documentUrls },
-  { key: "documentsFolderName", header: "Documents Folder Name", get: (r) => r.documentsFolderName },
-  { key: "documentsFolderPath", header: "Documents Folder Path", get: (r) => r.documentsFolderPath },
+  {
+    key: "Mother Name",
+    header: "Mother Name",
+    get: (r) => r.personalDetails?.motherName,
+  },
+  {
+    key: "Date of Birth",
+    header: "Date of Birth",
+    get: (r) => formatPayrollDate(r.personalDetails?.dateOfBirth),
+  },
+  {
+    key: "Sex",
+    header: "Sex",
+    get: (r) => sexCode(r.personalDetails?.gender),
+  },
+  {
+    key: "Marital Status",
+    header: "Marital Status",
+    get: (r) => maritalCode(r.personalDetails?.maritalStatus),
+  },
+  {
+    key: "Designation",
+    header: "Designation",
+    get: (r) =>
+      r.personalDetails?.designationCode || r.personalDetails?.postAppliedFor,
+  },
+  {
+    key: "Mobile No",
+    header: "Mobile No",
+    get: (r) => digitsOnly(r.phone),
+  },
+  {
+    key: "UAN Number",
+    header: "UAN Number",
+    get: (r) => digitsOnly(r.additionalDetails?.uanNo),
+  },
+  {
+    key: "Aadhar Number",
+    header: "Aadhar Number",
+    get: (r) => digitsOnly(r.personalDetails?.aadhaarNumber),
+  },
+  {
+    key: "PAN Number",
+    header: "PAN Number",
+    get: (r) => str(r.personalDetails?.panNumber).toUpperCase(),
+  },
+  {
+    key: "Present Landmark",
+    header: "Present Landmark",
+    get: (r) => present(r).landmark,
+  },
+  {
+    key: "Present Village",
+    header: "Present Village",
+    get: (r) => present(r).village,
+  },
+  {
+    key: "Present PostOffice",
+    header: "Present PostOffice",
+    get: (r) => present(r).postOffice,
+  },
+  {
+    key: "Present Taluka",
+    header: "Present Taluka",
+    get: (r) => present(r).taluka,
+  },
+  {
+    key: "Present PolicesStation",
+    header: "Present PolicesStation",
+    get: (r) => present(r).policeStation,
+  },
+  {
+    key: "Present State",
+    header: "Present State",
+    get: (r) => present(r).state,
+  },
+  {
+    key: "Present District",
+    header: "Present District",
+    get: (r) => present(r).district,
+  },
+  {
+    key: "Present Pincode",
+    header: "Present Pincode",
+    get: (r) => present(r).pincode,
+  },
+  {
+    key: "Present DateSinceResiding",
+    header: "Present DateSinceResiding",
+    get: (r) => formatPayrollDate(present(r).dateSinceResiding),
+  },
+  {
+    key: "Present PeriodOfStay",
+    header: "Present PeriodOfStay",
+    get: (r) => present(r).periodOfStay,
+  },
+  {
+    key: "Present Phone",
+    header: "Present Phone",
+    get: (r) => digitsOnly(present(r).phone || r.phone),
+  },
+  {
+    key: "Permanent Landmark",
+    header: "Permanent Landmark",
+    get: (r) => permanent(r).landmark,
+  },
+  {
+    key: "Permanent Village",
+    header: "Permanent Village",
+    get: (r) => permanent(r).village,
+  },
+  {
+    key: "Permanent PostOffice",
+    header: "Permanent PostOffice",
+    get: (r) => permanent(r).postOffice,
+  },
+  {
+    key: "Permanent Taluka",
+    header: "Permanent Taluka",
+    get: (r) => permanent(r).taluka,
+  },
+  {
+    key: "Permanent PolicesStation",
+    header: "Permanent PolicesStation",
+    get: (r) => permanent(r).policeStation,
+  },
+  {
+    key: "Permanent State",
+    header: "Permanent State",
+    get: (r) => permanent(r).state,
+  },
+  {
+    key: "Permanent District",
+    header: "Permanent District",
+    get: (r) => permanent(r).district,
+  },
+  {
+    key: "Permanent Pincode",
+    header: "Permanent Pincode",
+    get: (r) => permanent(r).pincode,
+  },
+  {
+    key: "Permanent DateSinceResiding",
+    header: "Permanent DateSinceResiding",
+    get: (r) => formatPayrollDate(permanent(r).dateSinceResiding),
+  },
+  {
+    key: "Permanent PeriodOfStay",
+    header: "Permanent PeriodOfStay",
+    get: (r) => permanent(r).periodOfStay,
+  },
+  {
+    key: "Permanent Phone",
+    header: "Permanent Phone",
+    get: (r) => digitsOnly(permanent(r).phone || r.phone),
+  },
+  {
+    key: "Department",
+    header: "Department",
+    get: (r) => r.personalDetails?.department,
+  },
+  {
+    key: "Client ID",
+    header: "Client ID",
+    get: (r) => r.personalDetails?.clientId,
+  },
+  {
+    key: "Branch",
+    header: "Branch",
+    get: (r) => r.personalDetails?.branchName,
+  },
+  {
+    key: "Division",
+    header: "Division",
+    get: (r) => r.personalDetails?.division,
+  },
+  {
+    key: "Bank Account No",
+    header: "Bank Account No",
+    get: (r) => digitsOnly(r.additionalDetails?.accountNumber),
+  },
+  {
+    key: "IFSC",
+    header: "IFSC",
+    get: (r) => str(r.additionalDetails?.ifscCode).toUpperCase(),
+  },
+  {
+    key: "Bank Name",
+    header: "Bank Name",
+    get: (r) => r.additionalDetails?.bankName,
+  },
+  {
+    key: "Date of Joining",
+    header: "Date of Joining",
+    get: (r) => formatPayrollDate(r.personalDetails?.dateOfJoining),
+  },
+  {
+    key: "Date of leaving",
+    header: "Date of leaving",
+    get: (r) => formatPayrollDate(r.personalDetails?.dateOfLeaving),
+  },
+  {
+    key: "ESI Applicable",
+    header: "ESI Applicable",
+    get: (r) =>
+      yesNo(
+        r.additionalDetails?.esiApplicable,
+        str(r.additionalDetails?.esicNumber) ? "YES" : ""
+      ),
+  },
+  {
+    key: "ESI No",
+    header: "ESI No",
+    get: (r) => str(r.additionalDetails?.esicNumber),
+  },
+  {
+    key: "PF Applicable",
+    header: "PF Applicable",
+    get: (r) =>
+      yesNo(
+        r.additionalDetails?.pfApplicable,
+        str(r.additionalDetails?.uanNo) || str(r.additionalDetails?.pfNumber)
+          ? "YES"
+          : ""
+      ),
+  },
+  {
+    key: "PF No",
+    header: "PF No",
+    get: (r) =>
+      str(r.additionalDetails?.pfNumber) ||
+      digitsOnly(r.additionalDetails?.uanNo),
+  },
+  {
+    key: "PT Applicable",
+    header: "PT Applicable",
+    get: (r) => yesNo(r.additionalDetails?.ptApplicable),
+  },
+  {
+    key: "Employee Type",
+    header: "Employee Type",
+    get: (r) => str(r.personalDetails?.employeeType) || "G",
+  },
+  {
+    key: "Old Emp ID",
+    header: "Old Emp ID",
+    get: (r) => r.personalDetails?.oldEmpId,
+  },
 ];
 
 export function getExcelColumnCount(): number {
@@ -279,8 +435,7 @@ export function buildRegistrationsExcelXml(rows: RegistrationExportSource[]): st
   const body = rows
     .map((row) => {
       const cells = COLUMNS.map((c) => {
-        const raw = c.get(row);
-        const text = flattenValue(raw);
+        const text = flattenValue(c.get(row));
         return `<Cell><Data ss:Type="String">${escapeXml(text)}</Data></Cell>`;
       }).join("");
       return `<Row>${cells}</Row>`;
@@ -294,7 +449,7 @@ export function buildRegistrationsExcelXml(rows: RegistrationExportSource[]): st
  xmlns:x="urn:schemas-microsoft-com:office:excel"
  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
  xmlns:html="http://www.w3.org/TR/REC-html40">
- <Worksheet ss:Name="Registrations">
+ <Worksheet ss:Name="EmployeeDetails">
   <Table>
    <Row>${headerCells}</Row>
    ${body}

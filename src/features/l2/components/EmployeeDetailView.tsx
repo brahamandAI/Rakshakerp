@@ -26,6 +26,7 @@ import {
   Contact,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DownloadExcelButton } from "@/features/export/components/DownloadExcelButton";
 
 interface HistoryItem {
   action: string;
@@ -244,6 +245,14 @@ export function EmployeeDetailView({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="flex justify-end">
+        <DownloadExcelButton
+          scope="l2"
+          employeeId={employee._id}
+          label="Download Excel"
+        />
       </div>
 
       <FieldChangesPanel changes={employee.pendingFieldChanges} />

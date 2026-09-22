@@ -14,6 +14,7 @@ import {
   DashboardSection,
   DashboardStatCard,
 } from "@/components/dashboard/DashboardUi";
+import { DownloadExcelButton } from "@/features/export/components/DownloadExcelButton";
 
 export const metadata = { title: "L2 Dashboard" };
 
@@ -30,6 +31,7 @@ export default async function L2DashboardPage() {
       <DashboardPageHeader
         title="L2 Approval"
         description="Final review, temporary ID generation, and document folders."
+        actions={<DownloadExcelButton scope="l2" />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

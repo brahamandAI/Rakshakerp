@@ -138,6 +138,10 @@ export interface AdditionalDetails {
   previousEmployer?: string;
   uanNo?: string;
   esicNumber?: string;
+  esiApplicable?: string;
+  pfApplicable?: string;
+  pfNumber?: string;
+  ptApplicable?: string;
   bankName?: string;
   bankBranchName?: string;
   accountHolderName?: string;

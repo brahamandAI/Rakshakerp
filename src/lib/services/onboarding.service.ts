@@ -67,28 +67,44 @@ function normalizeEducation(raw: unknown): EducationDetails {
   return {};
 }
 
+function composeAddressLine(part?: Record<string, string> | null): string {
+  if (!part) return "";
+  return [
+    part.landmark,
+    part.houseNo,
+    part.street,
+    part.village ?? part.villageOrCity,
+    part.postOffice,
+    part.taluka,
+    part.policeStation,
+    part.district,
+    part.state,
+    part.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function normalizeAddress(raw: unknown): EmployeeFormData["address"] {
   const addr = toPlain<EmployeeFormData["address"]>(raw, {});
-  if (addr.localAddress || addr.permanentAddress) {
-    return {
-      localAddress: addr.localAddress ?? "",
-      permanentAddress: addr.permanentAddress ?? "",
-      sameAsPresent: Boolean(addr.sameAsPresent),
-    };
-  }
+  const present = toPlain<Record<string, string>>(addr.present, {});
+  const permanent = toPlain<Record<string, string>>(addr.permanent, {});
 
-  const present = addr.present ?? {};
-  const permanent = addr.permanent ?? {};
+  const localAddress =
+    addr.localAddress ||
+    composeAddressLine(present) ||
+    "";
+  const permanentAddress =
+    addr.permanentAddress ||
+    composeAddressLine(permanent) ||
+    "";
+
   return {
-    localAddress:
-      [present.houseNo, present.street, present.villageOrCity, present.district, present.state, present.pincode]
-        .filter(Boolean)
-        .join(", ") || "",
-    permanentAddress:
-      [permanent.houseNo, permanent.street, permanent.villageOrCity, permanent.district, permanent.state, permanent.pincode]
-        .filter(Boolean)
-        .join(", ") || "",
+    localAddress,
+    permanentAddress,
     sameAsPresent: Boolean(addr.sameAsPresent),
+    present: Object.keys(present).length ? present : undefined,
+    permanent: Object.keys(permanent).length ? permanent : undefined,
   };
 }
 
@@ -102,18 +118,35 @@ function normalizePersonal(raw: unknown): EmployeeFormData["personalDetails"] {
       : undefined;
   const validBlood = blood || undefined;
 
+  const genderRaw = String(pd.gender ?? "").trim().toUpperCase();
+  const validGender =
+    genderRaw === "M" || genderRaw === "F" || genderRaw === "O"
+      ? genderRaw
+      : genderRaw === "MALE"
+        ? "M"
+        : genderRaw === "FEMALE"
+          ? "F"
+          : undefined;
+
   return {
     branchName: pd.branchName ?? "",
     clientId: pd.clientId ?? "",
     clientName: pd.clientName ?? "",
     siteName: pd.siteName ?? "",
     dateOfJoining: String(pd.dateOfJoining ?? "").trim(),
+    dateOfLeaving: pd.dateOfLeaving ?? "",
     postAppliedFor: pd.postAppliedFor ?? "",
+    designationCode: pd.designationCode ?? "",
+    department: pd.department ?? "",
+    division: pd.division ?? "",
+    employeeType: pd.employeeType ?? "G",
+    oldEmpId: pd.oldEmpId ?? "",
     fullName: pd.fullName ?? "",
     fatherName: pd.fatherName ?? pd.fatherOrHusbandName ?? "",
     motherName: pd.motherName ?? "",
     spouseOrNok: pd.spouseOrNok ?? "",
     dateOfBirth: pd.dateOfBirth ?? "",
+    gender: validGender,
     bloodGroup: validBlood,
     maritalStatus: validMarital,
     aadhaarNumber: pd.aadhaarNumber ?? "",
@@ -250,10 +283,21 @@ function mapDocumentRecord(doc: InstanceType<typeof EmployeeDocument>): Document
 export function mapStep1DataToEmployeeFields(data: Record<string, unknown>) {
   const payload = data as {
     personalDetails: Record<string, unknown>;
-    address: { localAddress: string; permanentAddress?: string; sameAsPresent: boolean };
+    address: {
+      localAddress: string;
+      permanentAddress?: string;
+      sameAsPresent: boolean;
+      present?: Record<string, string>;
+      permanent?: Record<string, string>;
+    };
     education: { educationalQualification: string; technicalQualification?: string };
     additionalDetails: Record<string, unknown>;
   };
+
+  const present = payload.address.present ?? {};
+  const permanent = payload.address.sameAsPresent
+    ? present
+    : payload.address.permanent ?? {};
 
   return {
     personalDetails: payload.personalDetails,
@@ -263,6 +307,8 @@ export function mapStep1DataToEmployeeFields(data: Record<string, unknown>) {
         ? payload.address.localAddress
         : payload.address.permanentAddress ?? "",
       sameAsPresent: payload.address.sameAsPresent,
+      present,
+      permanent,
     },
     education: payload.education,
     additionalDetails: payload.additionalDetails,
@@ -338,6 +384,10 @@ function getStepDataForValidation(formData: EmployeeFormData, step: number): unk
           previousEmployer: formData.additionalDetails.previousEmployer,
           uanNo: formData.additionalDetails.uanNo,
           esicNumber: formData.additionalDetails.esicNumber,
+          esiApplicable: formData.additionalDetails.esiApplicable,
+          pfApplicable: formData.additionalDetails.pfApplicable,
+          pfNumber: formData.additionalDetails.pfNumber,
+          ptApplicable: formData.additionalDetails.ptApplicable,
           bankName: formData.additionalDetails.bankName,
           bankBranchName: formData.additionalDetails.bankBranchName,
           accountHolderName: formData.additionalDetails.accountHolderName,

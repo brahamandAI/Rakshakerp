@@ -28,17 +28,21 @@ export async function GET(request: NextRequest) {
         ? "admin"
         : scope;
 
+    const employeeId = request.nextUrl.searchParams.get("id") ?? undefined;
+
     if (request.nextUrl.searchParams.get("preview") === "1") {
       const preview = await previewRegistrationsExport(
         effectiveScope,
-        session.user.id
+        session.user.id,
+        { employeeId }
       );
       return NextResponse.json(preview);
     }
 
     const { filename, xml } = await exportRegistrationsExcel(
       effectiveScope,
-      session.user.id
+      session.user.id,
+      { employeeId }
     );
 
     return new NextResponse(xml, {

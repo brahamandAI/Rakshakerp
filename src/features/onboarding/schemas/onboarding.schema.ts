@@ -6,6 +6,22 @@ const aadhaarRegex = /^\d{4}\s\d{4}\s\d{4}$/;
 const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
+const optionalYesNo = z.enum(["YES", "NO", ""]).optional();
+
+const structuredAddressPartSchema = z.object({
+  landmark: z.string().optional(),
+  village: z.string().optional(),
+  postOffice: z.string().optional(),
+  taluka: z.string().optional(),
+  policeStation: z.string().optional(),
+  state: z.string().optional(),
+  district: z.string().optional(),
+  pincode: z.string().optional(),
+  dateSinceResiding: z.string().optional(),
+  periodOfStay: z.string().optional(),
+  phone: z.string().optional(),
+});
+
 export const personalDetailsSchema = z
   .object({
     branchName: z.string().min(1, "Branch name is required"),
@@ -13,12 +29,24 @@ export const personalDetailsSchema = z
     clientName: z.string().optional(),
     siteName: z.string().min(1, "Site name is required"),
     dateOfJoining: z.string().min(1, "Date of joining is required"),
+    dateOfLeaving: z.string().optional(),
     postAppliedFor: z.string().min(1, "Post applied for is required"),
+    designationCode: z.string().optional(),
+    department: z.string().optional(),
+    division: z.string().optional(),
+    employeeType: z.string().optional(),
+    oldEmpId: z.string().optional(),
     fullName: z.string().min(2, "Full name is required").max(100),
     fatherName: z.string().min(2, "Father's name is required"),
     motherName: z.string().optional(),
     spouseOrNok: z.string().optional(),
     dateOfBirth: z.string().min(1, "Date of birth is required"),
+    gender: z.union([
+      z.literal("M"),
+      z.literal("F"),
+      z.literal("O"),
+      z.literal(""),
+    ]),
     maritalStatus: z.enum(["SINGLE", "MARRIED", "WIDOWED"], {
       required_error: "Marital status is required",
     }),
@@ -36,6 +64,13 @@ export const personalDetailsSchema = z
     identificationMarks: z.string().optional(),
   })
   .superRefine((data, ctx) => {
+    if (!(data.gender === "M" || data.gender === "F" || data.gender === "O")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Sex is required",
+        path: ["gender"],
+      });
+    }
     if (data.maritalStatus === "MARRIED" && !data.spouseOrNok?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -50,6 +85,8 @@ export const addressSchema = z
     localAddress: z.string().min(5, "Local address is required"),
     permanentAddress: z.string().optional(),
     sameAsPresent: z.boolean(),
+    present: structuredAddressPartSchema.optional(),
+    permanent: structuredAddressPartSchema.optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.sameAsPresent && !data.permanentAddress?.trim()) {
@@ -85,6 +122,10 @@ export const employmentPreferencesSchema = z.object({
     previousEmployer: z.string().optional(),
     uanNo: z.string().optional(),
     esicNumber: z.string().optional(),
+    esiApplicable: optionalYesNo,
+    pfApplicable: optionalYesNo,
+    pfNumber: z.string().optional(),
+    ptApplicable: optionalYesNo,
     bankName: z.string().optional(),
     bankBranchName: z.string().optional(),
     accountHolderName: z.string().optional(),

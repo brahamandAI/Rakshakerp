@@ -14,6 +14,7 @@ import {
 import { EmployeeStatus } from "@/types/enums";
 import { Pencil, Undo2 } from "lucide-react";
 import Link from "next/link";
+import { DownloadExcelButton } from "@/features/export/components/DownloadExcelButton";
 
 interface HistoryItem {
   action: string;
@@ -213,21 +214,28 @@ export function EmployeeDetailView({
             ))}
           </div>
         </div>
-        {[
-          EmployeeStatus.SUBMITTED,
-          EmployeeStatus.L1_REVIEW,
-          EmployeeStatus.L1_RETURNED,
-          EmployeeStatus.L2_RETURNED,
-        ].includes(status) && (
-          <Link
-            href={`/dashboard/l1/applications/${employee._id}/edit`}
-            prefetch
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-primary px-3 text-sm font-medium text-primary hover:bg-primary/5"
-          >
-            <Pencil className="h-4 w-4" />
-            Edit Details
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <DownloadExcelButton
+            scope="l1"
+            employeeId={employee._id}
+            label="Download Excel"
+          />
+          {[
+            EmployeeStatus.SUBMITTED,
+            EmployeeStatus.L1_REVIEW,
+            EmployeeStatus.L1_RETURNED,
+            EmployeeStatus.L2_RETURNED,
+          ].includes(status) && (
+            <Link
+              href={`/dashboard/l1/applications/${employee._id}/edit`}
+              prefetch
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-primary px-3 text-sm font-medium text-primary hover:bg-primary/5"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit Details
+            </Link>
+          )}
+        </div>
       </div>
 
       {reversedFromL2 && (

@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 interface DownloadExcelButtonProps {
   scope: "l1" | "l2" | "admin";
   label?: string;
+  /** When set, exports only this registration (Sampleempdetails format). */
+  employeeId?: string;
 }
 
 interface PreviewData {
@@ -19,6 +21,7 @@ interface PreviewData {
 export function DownloadExcelButton({
   scope,
   label = "Download Excel",
+  employeeId,
 }: DownloadExcelButtonProps) {
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -44,11 +47,18 @@ export function DownloadExcelButton({
     };
   }, [preview]);
 
+  function apiUrl(preview = false) {
+    const params = new URLSearchParams({ scope });
+    if (preview) params.set("preview", "1");
+    if (employeeId) params.set("id", employeeId);
+    return `/api/export/registrations?${params.toString()}`;
+  }
+
   async function loadPreview() {
     setPreviewLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/export/registrations?scope=${scope}&preview=1`);
+      const res = await fetch(apiUrl(true));
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to load preview");
@@ -66,7 +76,7 @@ export function DownloadExcelButton({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/export/registrations?scope=${scope}`);
+      const res = await fetch(apiUrl(false));
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to download Excel");
@@ -74,7 +84,9 @@ export function DownloadExcelButton({
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition");
       const match = disposition?.match(/filename="([^"]+)"/);
-      const filename = match?.[1] ?? `registrations-${scope}.xls`;
+      const filename =
+        match?.[1] ??
+        (employeeId ? `empdetails-${scope}-one.xls` : `empdetails-${scope}.xls`);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -114,7 +126,11 @@ export function DownloadExcelButton({
                   <p className="text-xs text-[#64748B]">
                     Showing {preview.rows.length} of {preview.count} registration
                     {preview.count === 1 ? "" : "s"} · {preview.columns.length} columns
-                    {scope === "admin" ? " (L2 approved only)" : ""}
+                    {employeeId
+                      ? " (single registration)"
+                      : scope === "admin"
+                        ? " (L2 approved only)"
+                        : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -177,9 +193,9 @@ export function DownloadExcelButton({
                   </table>
                 )}
                 <p className="mt-3 text-xs leading-relaxed text-[#64748B]">
-                  Scroll horizontally to review all {preview.columns.length} columns. The downloaded
-                  Excel file includes the same complete registration fields, documents list, and
-                  approval details.
+                  Columns match the Sampleempdetails payroll Excel format (IDNO, address,
+                  bank, ESI/PF, etc.). Scroll horizontally to review all {preview.columns.length}{" "}
+                  columns.
                 </p>
               </div>
             </div>

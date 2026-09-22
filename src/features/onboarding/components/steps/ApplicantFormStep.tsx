@@ -36,29 +36,73 @@ function formatAadhaarInput(value: string): string {
   return parts.join(" ");
 }
 
+function emptyAddressPart() {
+  return {
+    landmark: "",
+    village: "",
+    postOffice: "",
+    taluka: "",
+    policeStation: "",
+    state: "",
+    district: "",
+    pincode: "",
+    dateSinceResiding: "",
+    periodOfStay: "",
+    phone: "",
+  };
+}
+
 function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
   const pd = formData.personalDetails;
   const addr = formData.address;
   const edu = formData.education;
   const add = formData.additionalDetails;
 
+  const present = {
+    ...emptyAddressPart(),
+    ...(addr.present ?? {}),
+    village: addr.present?.village ?? addr.present?.villageOrCity ?? "",
+  };
+  const permanent = {
+    ...emptyAddressPart(),
+    ...(addr.permanent ?? {}),
+    village: addr.permanent?.village ?? addr.permanent?.villageOrCity ?? "",
+  };
+
   const localAddress =
     addr.localAddress ??
-    (addr.present
-      ? [addr.present.houseNo, addr.present.street, addr.present.villageOrCity, addr.present.district, addr.present.state, addr.present.pincode]
-          .filter(Boolean)
-          .join(", ")
-      : "");
+    [
+      present.landmark,
+      present.village,
+      present.district,
+      present.state,
+      present.pincode,
+    ]
+      .filter(Boolean)
+      .join(", ");
 
   const permanentAddress =
     addr.permanentAddress ??
-    (addr.permanent
-      ? [addr.permanent.houseNo, addr.permanent.street, addr.permanent.villageOrCity, addr.permanent.district, addr.permanent.state, addr.permanent.pincode]
-          .filter(Boolean)
-          .join(", ")
-      : "");
+    [
+      permanent.landmark,
+      permanent.village,
+      permanent.district,
+      permanent.state,
+      permanent.pincode,
+    ]
+      .filter(Boolean)
+      .join(", ");
 
   const legacyEdu = edu.entries?.[0];
+  const genderRaw = String(pd.gender ?? "").trim().toUpperCase();
+  const gender =
+    genderRaw === "M" || genderRaw === "F" || genderRaw === "O"
+      ? genderRaw
+      : genderRaw === "MALE"
+        ? "M"
+        : genderRaw === "FEMALE"
+          ? "F"
+          : "";
 
   return {
     personalDetails: {
@@ -67,12 +111,19 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
       clientName: pd.clientName ?? "",
       siteName: pd.siteName ?? "",
       dateOfJoining: pd.dateOfJoining ?? "",
+      dateOfLeaving: pd.dateOfLeaving ?? "",
       postAppliedFor: pd.postAppliedFor ?? "",
+      designationCode: pd.designationCode ?? "",
+      department: pd.department ?? "",
+      division: pd.division ?? "",
+      employeeType: pd.employeeType ?? "G",
+      oldEmpId: pd.oldEmpId ?? "",
       fullName: pd.fullName ?? "",
       fatherName: pd.fatherName ?? pd.fatherOrHusbandName ?? "",
       motherName: pd.motherName ?? "",
       spouseOrNok: pd.spouseOrNok ?? "",
       dateOfBirth: pd.dateOfBirth ?? "",
+      gender,
       maritalStatus: (["SINGLE", "MARRIED", "WIDOWED"].includes(String(pd.maritalStatus))
         ? pd.maritalStatus
         : "SINGLE") as ApplicantFormInput["personalDetails"]["maritalStatus"],
@@ -87,6 +138,8 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
       localAddress,
       permanentAddress,
       sameAsPresent: addr.sameAsPresent ?? false,
+      present,
+      permanent,
     },
     education: {
       educationalQualification:
@@ -109,6 +162,16 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
       previousEmployer: add.previousEmployer ?? "",
       uanNo: add.uanNo ?? "",
       esicNumber: add.esicNumber ?? "",
+      esiApplicable: (add.esiApplicable === "YES" || add.esiApplicable === "NO"
+        ? add.esiApplicable
+        : "") as ApplicantFormInput["additionalDetails"]["esiApplicable"],
+      pfApplicable: (add.pfApplicable === "YES" || add.pfApplicable === "NO"
+        ? add.pfApplicable
+        : "") as ApplicantFormInput["additionalDetails"]["pfApplicable"],
+      pfNumber: add.pfNumber ?? "",
+      ptApplicable: (add.ptApplicable === "YES" || add.ptApplicable === "NO"
+        ? add.ptApplicable
+        : "") as ApplicantFormInput["additionalDetails"]["ptApplicable"],
       bankName: add.bankName ?? "",
       bankBranchName: add.bankBranchName ?? "",
       accountHolderName: add.accountHolderName ?? "",
@@ -192,6 +255,10 @@ export function ApplicantFormStep({
             />
           </div>
           <div className="space-y-2">
+            <Label>Date of Leaving</Label>
+            <Input type="date" {...register("personalDetails.dateOfLeaving")} />
+          </div>
+          <div className="space-y-2">
             <Label>Client Name</Label>
             <Input {...register("personalDetails.clientName")} error={errors.personalDetails?.clientName?.message} />
           </div>
@@ -199,9 +266,29 @@ export function ApplicantFormStep({
             <Label required>Site Name</Label>
             <Input {...register("personalDetails.siteName")} error={errors.personalDetails?.siteName?.message} />
           </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label required>Post Applied For</Label>
+          <div className="space-y-2">
+            <Label required>Post Applied For / Designation</Label>
             <Input {...register("personalDetails.postAppliedFor")} placeholder="Security Guard / Supervisor / Gunman" error={errors.personalDetails?.postAppliedFor?.message} />
+          </div>
+          <div className="space-y-2">
+            <Label>Designation Code</Label>
+            <Input {...register("personalDetails.designationCode")} placeholder="If different from post" />
+          </div>
+          <div className="space-y-2">
+            <Label>Department</Label>
+            <Input {...register("personalDetails.department")} />
+          </div>
+          <div className="space-y-2">
+            <Label>Division</Label>
+            <Input {...register("personalDetails.division")} />
+          </div>
+          <div className="space-y-2">
+            <Label>Employee Type</Label>
+            <Input {...register("personalDetails.employeeType")} placeholder="G" />
+          </div>
+          <div className="space-y-2">
+            <Label>Old Emp ID</Label>
+            <Input {...register("personalDetails.oldEmpId")} placeholder="RSMxxxxxx" />
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Label required>Full Name of Applicant</Label>
@@ -238,6 +325,19 @@ export function ApplicantFormStep({
           <div className="space-y-2">
             <Label required>Date of Birth</Label>
             <Input type="date" {...register("personalDetails.dateOfBirth")} error={errors.personalDetails?.dateOfBirth?.message} />
+          </div>
+          <div className="space-y-2">
+            <Label required>Sex</Label>
+            <Select
+              {...register("personalDetails.gender")}
+              options={[
+                { value: "", label: "Select sex" },
+                { value: "M", label: "Male (M)" },
+                { value: "F", label: "Female (F)" },
+                { value: "O", label: "Other (O)" },
+              ]}
+              error={errors.personalDetails?.gender?.message}
+            />
           </div>
           <div className="space-y-2">
             <Label required>Aadhar No.</Label>
@@ -303,27 +403,68 @@ export function ApplicantFormStep({
             )}
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label required>Local Address</Label>
+            <Label required>Local Address (summary)</Label>
             <Textarea {...register("address.localAddress")} rows={2} error={errors.address?.localAddress?.message} />
+          </div>
+          <div className="sm:col-span-2 space-y-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+            <div>
+              <h4 className="text-sm font-semibold text-[#0F172A]">Present Address Details</h4>
+              <p className="mt-0.5 text-xs text-[#64748B]">Optional — used in payroll Excel export.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2"><Label>Present Landmark</Label><Input {...register("address.present.landmark")} /></div>
+              <div className="space-y-2"><Label>Present Village</Label><Input {...register("address.present.village")} /></div>
+              <div className="space-y-2"><Label>Present Post Office</Label><Input {...register("address.present.postOffice")} /></div>
+              <div className="space-y-2"><Label>Present Taluka</Label><Input {...register("address.present.taluka")} /></div>
+              <div className="space-y-2"><Label>Present Police Station</Label><Input {...register("address.present.policeStation")} /></div>
+              <div className="space-y-2"><Label>Present State</Label><Input {...register("address.present.state")} /></div>
+              <div className="space-y-2"><Label>Present District</Label><Input {...register("address.present.district")} /></div>
+              <div className="space-y-2"><Label>Present Pincode</Label><Input {...register("address.present.pincode")} /></div>
+              <div className="space-y-2"><Label>Present Date Since Residing</Label><Input type="date" {...register("address.present.dateSinceResiding")} /></div>
+              <div className="space-y-2"><Label>Present Period of Stay</Label><Input {...register("address.present.periodOfStay")} placeholder="e.g. 2 Years" /></div>
+              <div className="space-y-2"><Label>Present Phone</Label><Input {...register("address.present.phone")} /></div>
+            </div>
           </div>
           <div className="space-y-2 sm:col-span-2">
             <Checkbox
               id="sameAsPresent"
-              label="Permanent address same as local address"
+              label="Permanent address same as local / present address"
               checked={sameAsPresent}
               onChange={(e) => {
                 setValue("address.sameAsPresent", e.target.checked);
                 if (e.target.checked) {
                   setValue("address.permanentAddress", watch("address.localAddress"));
+                  setValue("address.permanent", watch("address.present"));
                 }
               }}
             />
           </div>
           {!sameAsPresent && (
-            <div className="space-y-2 sm:col-span-2">
-              <Label required>Permanent Address</Label>
-              <Textarea {...register("address.permanentAddress")} rows={2} error={errors.address?.permanentAddress?.message} />
-            </div>
+            <>
+              <div className="space-y-2 sm:col-span-2">
+                <Label required>Permanent Address (summary)</Label>
+                <Textarea {...register("address.permanentAddress")} rows={2} error={errors.address?.permanentAddress?.message} />
+              </div>
+              <div className="sm:col-span-2 space-y-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-[#0F172A]">Permanent Address Details</h4>
+                  <p className="mt-0.5 text-xs text-[#64748B]">Optional — used in payroll Excel export.</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2"><Label>Permanent Landmark</Label><Input {...register("address.permanent.landmark")} /></div>
+                  <div className="space-y-2"><Label>Permanent Village</Label><Input {...register("address.permanent.village")} /></div>
+                  <div className="space-y-2"><Label>Permanent Post Office</Label><Input {...register("address.permanent.postOffice")} /></div>
+                  <div className="space-y-2"><Label>Permanent Taluka</Label><Input {...register("address.permanent.taluka")} /></div>
+                  <div className="space-y-2"><Label>Permanent Police Station</Label><Input {...register("address.permanent.policeStation")} /></div>
+                  <div className="space-y-2"><Label>Permanent State</Label><Input {...register("address.permanent.state")} /></div>
+                  <div className="space-y-2"><Label>Permanent District</Label><Input {...register("address.permanent.district")} /></div>
+                  <div className="space-y-2"><Label>Permanent Pincode</Label><Input {...register("address.permanent.pincode")} /></div>
+                  <div className="space-y-2"><Label>Permanent Date Since Residing</Label><Input type="date" {...register("address.permanent.dateSinceResiding")} /></div>
+                  <div className="space-y-2"><Label>Permanent Period of Stay</Label><Input {...register("address.permanent.periodOfStay")} placeholder="e.g. 2 Years" /></div>
+                  <div className="space-y-2"><Label>Permanent Phone</Label><Input {...register("address.permanent.phone")} /></div>
+                </div>
+              </div>
+            </>
           )}
           <div className="space-y-2">
             <Label required>Height (cm)</Label>
@@ -411,8 +552,45 @@ export function ApplicantFormStep({
             </p>
           </div>
           <div className="space-y-2">
-            <Label>ESIC Number</Label>
+            <Label>PF No</Label>
+            <Input {...register("additionalDetails.pfNumber")} />
+          </div>
+          <div className="space-y-2">
+            <Label>ESI Applicable</Label>
+            <Select
+              {...register("additionalDetails.esiApplicable")}
+              options={[
+                { value: "", label: "Select" },
+                { value: "YES", label: "YES" },
+                { value: "NO", label: "NO" },
+              ]}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>ESI / ESIC Number</Label>
             <Input {...register("additionalDetails.esicNumber")} error={errors.additionalDetails?.esicNumber?.message} />
+          </div>
+          <div className="space-y-2">
+            <Label>PF Applicable</Label>
+            <Select
+              {...register("additionalDetails.pfApplicable")}
+              options={[
+                { value: "", label: "Select" },
+                { value: "YES", label: "YES" },
+                { value: "NO", label: "NO" },
+              ]}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>PT Applicable</Label>
+            <Select
+              {...register("additionalDetails.ptApplicable")}
+              options={[
+                { value: "", label: "Select" },
+                { value: "YES", label: "YES" },
+                { value: "NO", label: "NO" },
+              ]}
+            />
           </div>
           <div className="sm:col-span-2 space-y-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
             <div>
