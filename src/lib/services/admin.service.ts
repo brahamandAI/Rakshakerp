@@ -1,11 +1,6 @@
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db/connect";
-import { Setting } from "@/lib/db/models/Setting";
-import { Department } from "@/lib/db/models/Department";
-import { Designation } from "@/lib/db/models/Designation";
-import { SiteLocation } from "@/lib/db/models/SiteLocation";
-import { User } from "@/lib/db/models/User";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
+import { newObjectIdString } from "@/lib/db/ids";
+import { Prisma } from "@/generated/prisma/client";
 import { StaffRole, UserRole } from "@/types/enums";
 import { hashPassword } from "@/lib/auth/password";
 import { logAudit } from "@/lib/services/audit.service";
@@ -69,7 +64,23 @@ interface AdminContext {
   userRole: string;
 }
 
-async function audit(ctx: AdminContext, action: string, entity: string, entityId?: string, details?: Record<string, unknown>) {
+type WithMongoId<T extends { id: string }> = T & { _id: string };
+
+function withMongoId<T extends { id: string }>(row: T): WithMongoId<T> {
+  return { ...row, _id: row.id };
+}
+
+function asInputJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
+async function audit(
+  ctx: AdminContext,
+  action: string,
+  entity: string,
+  entityId?: string,
+  details?: Record<string, unknown>
+) {
   await logAudit({
     action,
     entity,
@@ -81,165 +92,393 @@ async function audit(ctx: AdminContext, action: string, entity: string, entityId
   });
 }
 
-export async function getCompanyDetails(): Promise<CompanyDetails> {
-  await connectDB();
-  const doc = await Setting.findOne({ key: COMPANY_KEY }).lean();
-  if (!doc) return DEFAULT_COMPANY;
-  return toClientProps({ ...DEFAULT_COMPANY, ...(doc.value as unknown as CompanyDetails) });
+async function upsertSetting(key: string, value: unknown): Promise<void> {
+  const now = new Date();
+  await prisma.setting.upsert({
+    where: { key },
+    create: {
+      id: newObjectIdString(),
+      key,
+      value: asInputJson(value),
+      createdAt: now,
+      updatedAt: now,
+    },
+    update: {
+      value: asInputJson(value),
+      updatedAt: now,
+    },
+  });
 }
 
-export async function updateCompanyDetails(ctx: AdminContext, data: CompanyDetails): Promise<void> {
-  await connectDB();
-  await Setting.findOneAndUpdate(
-    { key: COMPANY_KEY },
-    { value: data },
-    { upsert: true }
-  );
+export async function getCompanyDetails(): Promise<CompanyDetails> {
+  const doc = await prisma.setting.findUnique({ where: { key: COMPANY_KEY } });
+  if (!doc) return DEFAULT_COMPANY;
+  return toClientProps({
+    ...DEFAULT_COMPANY,
+    ...(doc.value as unknown as CompanyDetails),
+  });
+}
+
+export async function updateCompanyDetails(
+  ctx: AdminContext,
+  data: CompanyDetails
+): Promise<void> {
+  await upsertSetting(COMPANY_KEY, data);
   await audit(ctx, "UPDATE", "COMPANY", COMPANY_KEY, { name: data.name });
 }
 
 export async function getAppSettings(): Promise<AppSettings> {
-  await connectDB();
-  const doc = await Setting.findOne({ key: APP_SETTINGS_KEY }).lean();
+  const doc = await prisma.setting.findUnique({
+    where: { key: APP_SETTINGS_KEY },
+  });
   if (!doc) return DEFAULT_SETTINGS;
-  return toClientProps({ ...DEFAULT_SETTINGS, ...(doc.value as unknown as AppSettings) });
+  return toClientProps({
+    ...DEFAULT_SETTINGS,
+    ...(doc.value as unknown as AppSettings),
+  });
 }
 
-export async function updateAppSettings(ctx: AdminContext, data: AppSettings): Promise<void> {
-  await connectDB();
-  await Setting.findOneAndUpdate(
-    { key: APP_SETTINGS_KEY },
-    { value: data },
-    { upsert: true }
+export async function updateAppSettings(
+  ctx: AdminContext,
+  data: AppSettings
+): Promise<void> {
+  await upsertSetting(APP_SETTINGS_KEY, data);
+  await audit(
+    ctx,
+    "UPDATE",
+    "SETTINGS",
+    APP_SETTINGS_KEY,
+    data as unknown as Record<string, unknown>
   );
-  await audit(ctx, "UPDATE", "SETTINGS", APP_SETTINGS_KEY, data as unknown as Record<string, unknown>);
 }
 
 export async function listDepartments() {
-  await connectDB();
-  return Department.find().sort({ name: 1 }).lean();
+  const rows = await prisma.department.findMany({
+    orderBy: { name: "asc" },
+  });
+  return rows.map(withMongoId);
 }
 
-export async function createDepartment(ctx: AdminContext, data: { name: string; code: string; description?: string }) {
-  await connectDB();
-  const existing = await Department.findOne({ code: data.code.toUpperCase() });
+export async function createDepartment(
+  ctx: AdminContext,
+  data: { name: string; code: string; description?: string }
+) {
+  const code = data.code.toUpperCase();
+  const existing = await prisma.department.findFirst({ where: { code } });
   if (existing) throw new AdminError("Department code already exists", "DUPLICATE");
-  const dept = await Department.create({ ...data, code: data.code.toUpperCase() });
-  await audit(ctx, "CREATE", "DEPARTMENT", String(dept._id), { name: data.name });
-  return dept;
+
+  const now = new Date();
+  const dept = await prisma.department.create({
+    data: {
+      id: newObjectIdString(),
+      name: data.name,
+      code,
+      description: data.description ?? null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+
+  await audit(ctx, "CREATE", "DEPARTMENT", dept.id, { name: data.name });
+  return withMongoId(dept);
 }
 
-export async function updateDepartment(ctx: AdminContext, id: string, data: Partial<{ name: string; description: string; isActive: boolean }>) {
-  await connectDB();
-  const dept = await Department.findByIdAndUpdate(id, data, { new: true });
-  if (!dept) throw new AdminError("Department not found", "NOT_FOUND");
+export async function updateDepartment(
+  ctx: AdminContext,
+  id: string,
+  data: Partial<{ name: string; description: string; isActive: boolean }>
+) {
+  const existing = await prisma.department.findUnique({ where: { id } });
+  if (!existing) throw new AdminError("Department not found", "NOT_FOUND");
+
+  const dept = await prisma.department.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      updatedAt: new Date(),
+    },
+  });
+
   await audit(ctx, "UPDATE", "DEPARTMENT", id, data as Record<string, unknown>);
-  return dept;
+  return withMongoId(dept);
 }
 
 export async function listDesignations() {
-  await connectDB();
-  return Designation.find().populate("departmentId", "name").sort({ name: 1 }).lean();
-}
-
-export async function createDesignation(ctx: AdminContext, data: { name: string; code: string; departmentId?: string; level?: number }) {
-  await connectDB();
-  const existing = await Designation.findOne({ code: data.code.toUpperCase() });
-  if (existing) throw new AdminError("Designation code already exists", "DUPLICATE");
-  const des = await Designation.create({
-    name: data.name,
-    code: data.code.toUpperCase(),
-    departmentId: data.departmentId ? new mongoose.Types.ObjectId(data.departmentId) : undefined,
-    level: data.level ?? 1,
+  const rows = await prisma.designation.findMany({
+    include: {
+      department: { select: { id: true, name: true } },
+    },
+    orderBy: { name: "asc" },
   });
-  await audit(ctx, "CREATE", "DESIGNATION", String(des._id), { name: data.name });
-  return des;
+
+  return rows.map((row) => {
+    const { department, ...rest } = row;
+    return {
+      ...withMongoId(rest),
+      departmentId: department
+        ? { _id: department.id, name: department.name }
+        : null,
+    };
+  });
 }
 
-export async function updateDesignation(ctx: AdminContext, id: string, data: Partial<{ name: string; level: number; isActive: boolean }>) {
-  await connectDB();
-  const des = await Designation.findByIdAndUpdate(id, data, { new: true });
-  if (!des) throw new AdminError("Designation not found", "NOT_FOUND");
+export async function createDesignation(
+  ctx: AdminContext,
+  data: {
+    name: string;
+    code: string;
+    departmentId?: string;
+    level?: number;
+  }
+) {
+  const code = data.code.toUpperCase();
+  if (!data.departmentId) {
+    throw new AdminError("Department is required", "VALIDATION");
+  }
+
+  const department = await prisma.department.findUnique({
+    where: { id: data.departmentId },
+    select: { id: true },
+  });
+  if (!department) {
+    throw new AdminError("Department not found", "NOT_FOUND");
+  }
+
+  const existing = await prisma.designation.findFirst({ where: { code } });
+  if (existing) {
+    throw new AdminError("Designation code already exists", "DUPLICATE");
+  }
+
+  const now = new Date();
+  const des = await prisma.designation.create({
+    data: {
+      id: newObjectIdString(),
+      name: data.name,
+      code,
+      departmentId: department.id,
+      level: data.level ?? 1,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+
+  await audit(ctx, "CREATE", "DESIGNATION", des.id, { name: data.name });
+  return withMongoId(des);
+}
+
+export async function updateDesignation(
+  ctx: AdminContext,
+  id: string,
+  data: Partial<{ name: string; level: number; isActive: boolean }>
+) {
+  const existing = await prisma.designation.findUnique({ where: { id } });
+  if (!existing) throw new AdminError("Designation not found", "NOT_FOUND");
+
+  const des = await prisma.designation.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.level !== undefined ? { level: data.level } : {}),
+      ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      updatedAt: new Date(),
+    },
+  });
+
   await audit(ctx, "UPDATE", "DESIGNATION", id, data as Record<string, unknown>);
-  return des;
+  return withMongoId(des);
 }
 
 export async function listSiteLocations() {
-  await connectDB();
-  return SiteLocation.find().sort({ name: 1 }).lean();
+  const rows = await prisma.siteLocation.findMany({
+    orderBy: { name: "asc" },
+  });
+  return rows.map(withMongoId);
 }
 
-export async function createSiteLocation(ctx: AdminContext, data: {
-  name: string; code: string; address?: string; city: string; state: string;
-  pincode?: string; contactPerson?: string; contactPhone?: string;
-}) {
-  await connectDB();
-  const existing = await SiteLocation.findOne({ code: data.code.toUpperCase() });
+export async function createSiteLocation(
+  ctx: AdminContext,
+  data: {
+    name: string;
+    code: string;
+    address?: string;
+    city: string;
+    state: string;
+    pincode?: string;
+    contactPerson?: string;
+    contactPhone?: string;
+  }
+) {
+  const code = data.code.toUpperCase();
+  const existing = await prisma.siteLocation.findFirst({ where: { code } });
   if (existing) throw new AdminError("Site code already exists", "DUPLICATE");
-  const site = await SiteLocation.create({ ...data, code: data.code.toUpperCase() });
-  await audit(ctx, "CREATE", "SITE_LOCATION", String(site._id), { name: data.name });
-  return site;
+
+  const now = new Date();
+  const site = await prisma.siteLocation.create({
+    data: {
+      id: newObjectIdString(),
+      name: data.name,
+      code,
+      address: data.address ?? null,
+      city: data.city,
+      state: data.state,
+      pincode: data.pincode ?? null,
+      contactPerson: data.contactPerson ?? null,
+      contactPhone: data.contactPhone ?? null,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+  });
+
+  await audit(ctx, "CREATE", "SITE_LOCATION", site.id, { name: data.name });
+  return withMongoId(site);
 }
 
-export async function updateSiteLocation(ctx: AdminContext, id: string, data: Partial<{
-  name: string; address: string; city: string; state: string; pincode: string;
-  contactPerson: string; contactPhone: string; isActive: boolean;
-}>) {
-  await connectDB();
-  const site = await SiteLocation.findByIdAndUpdate(id, data, { new: true });
-  if (!site) throw new AdminError("Site location not found", "NOT_FOUND");
+export async function updateSiteLocation(
+  ctx: AdminContext,
+  id: string,
+  data: Partial<{
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+    contactPerson: string;
+    contactPhone: string;
+    isActive: boolean;
+  }>
+) {
+  const existing = await prisma.siteLocation.findUnique({ where: { id } });
+  if (!existing) throw new AdminError("Site location not found", "NOT_FOUND");
+
+  const site = await prisma.siteLocation.update({
+    where: { id },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.address !== undefined ? { address: data.address } : {}),
+      ...(data.city !== undefined ? { city: data.city } : {}),
+      ...(data.state !== undefined ? { state: data.state } : {}),
+      ...(data.pincode !== undefined ? { pincode: data.pincode } : {}),
+      ...(data.contactPerson !== undefined
+        ? { contactPerson: data.contactPerson }
+        : {}),
+      ...(data.contactPhone !== undefined
+        ? { contactPhone: data.contactPhone }
+        : {}),
+      ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+      updatedAt: new Date(),
+    },
+  });
+
   await audit(ctx, "UPDATE", "SITE_LOCATION", id, data as Record<string, unknown>);
-  return site;
+  return withMongoId(site);
 }
 
 const MANAGEABLE_ROLES: StaffRole[] = [
   UserRole.SUBMITTER,
   UserRole.L1,
   UserRole.L2,
+  UserRole.SCANNING,
   UserRole.ADMIN,
 ];
 
+const staffUserPublicSelect = {
+  id: true,
+  email: true,
+  name: true,
+  role: true,
+  department: true,
+  phone: true,
+  isActive: true,
+  failedLoginAttempts: true,
+  lockedUntil: true,
+  passwordChangedAt: true,
+  createdBy: true,
+  lastLoginAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 export async function listStaffUsers() {
-  await connectDB();
-  return User.find({ role: { $in: MANAGEABLE_ROLES } })
-    .sort({ createdAt: -1 })
-    .select("-passwordHash -resetPasswordToken")
-    .lean();
+  const rows = await prisma.user.findMany({
+    where: { role: { in: MANAGEABLE_ROLES } },
+    orderBy: { createdAt: "desc" },
+    select: staffUserPublicSelect,
+  });
+  return rows.map(withMongoId);
 }
 
-export async function createStaffUser(ctx: AdminContext, data: {
-  name: string; email: string; password: string; role: StaffRole;
-  department?: string; phone?: string;
-}) {
-  await connectDB();
+export async function createStaffUser(
+  ctx: AdminContext,
+  data: {
+    name: string;
+    email: string;
+    password: string;
+    role: StaffRole;
+    department?: string;
+    phone?: string;
+  }
+) {
   if (!MANAGEABLE_ROLES.includes(data.role)) {
     throw new AdminError("Invalid role for staff user creation", "FORBIDDEN");
   }
-  const existing = await User.findOne({ email: data.email.toLowerCase() });
+
+  const email = data.email.toLowerCase();
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new AdminError("Email already registered", "DUPLICATE");
-  const user = await User.create({
-    name: data.name,
-    email: data.email.toLowerCase(),
-    passwordHash: await hashPassword(data.password),
-    role: data.role,
-    department: data.department,
-    phone: data.phone,
-    isActive: true,
-    createdBy: new mongoose.Types.ObjectId(ctx.userId),
-    failedLoginAttempts: 0,
+
+  const creator = await prisma.user.findUnique({
+    where: { id: ctx.userId },
+    select: { id: true },
   });
-  await audit(ctx, "CREATE", "USER", String(user._id), { email: data.email, role: data.role });
-  return user;
+
+  const now = new Date();
+  const user = await prisma.user.create({
+    data: {
+      id: newObjectIdString(),
+      name: data.name,
+      email,
+      passwordHash: await hashPassword(data.password),
+      role: data.role,
+      department: data.department ?? null,
+      phone: data.phone ?? null,
+      isActive: true,
+      createdBy: creator?.id ?? null,
+      failedLoginAttempts: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
+    select: staffUserPublicSelect,
+  });
+
+  await audit(ctx, "CREATE", "USER", user.id, {
+    email: data.email,
+    role: data.role,
+  });
+  return withMongoId(user);
 }
 
-export async function updateStaffUser(ctx: AdminContext, id: string, data: Partial<{
-  name: string; role: StaffRole; department: string; phone: string; isActive: boolean; password: string;
-}>) {
-  await connectDB();
+export async function updateStaffUser(
+  ctx: AdminContext,
+  id: string,
+  data: Partial<{
+    name: string;
+    role: StaffRole;
+    department: string;
+    phone: string;
+    isActive: boolean;
+    password: string;
+  }>
+) {
   if (id === ctx.userId && data.isActive === false) {
     throw new AdminError("Cannot deactivate your own account", "FORBIDDEN");
   }
-  const userToUpdate = await User.findById(id);
+
+  const userToUpdate = await prisma.user.findUnique({ where: { id } });
   if (!userToUpdate) throw new AdminError("User not found", "NOT_FOUND");
   if (!MANAGEABLE_ROLES.includes(userToUpdate.role as StaffRole)) {
     throw new AdminError("This user cannot be modified here", "FORBIDDEN");
@@ -258,70 +497,92 @@ export async function updateStaffUser(ctx: AdminContext, id: string, data: Parti
     data.role &&
     data.role !== UserRole.ADMIN
   ) {
-    const otherAdmins = await User.countDocuments({
-      role: UserRole.ADMIN,
-      _id: { $ne: userToUpdate._id },
-      isActive: true,
+    const otherAdmins = await prisma.user.count({
+      where: {
+        role: UserRole.ADMIN,
+        id: { not: userToUpdate.id },
+        isActive: true,
+      },
     });
     if (otherAdmins === 0) {
-      throw new AdminError("Cannot change the role of the last active admin", "FORBIDDEN");
+      throw new AdminError(
+        "Cannot change the role of the last active admin",
+        "FORBIDDEN"
+      );
     }
   }
 
-  if (data.name !== undefined) userToUpdate.name = data.name;
-  if (data.role !== undefined) userToUpdate.role = data.role;
-  if (data.department !== undefined) userToUpdate.department = data.department;
-  if (data.phone !== undefined) userToUpdate.phone = data.phone;
-  if (data.isActive !== undefined) userToUpdate.isActive = data.isActive;
+  const updateData: Prisma.UserUpdateInput = {
+    updatedAt: new Date(),
+  };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.role !== undefined) updateData.role = data.role;
+  if (data.department !== undefined) updateData.department = data.department;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.isActive !== undefined) updateData.isActive = data.isActive;
   if (data.password) {
-    userToUpdate.passwordHash = await hashPassword(data.password);
-    userToUpdate.passwordChangedAt = new Date();
-    userToUpdate.resetPasswordToken = undefined;
-    userToUpdate.resetPasswordExpires = undefined;
+    updateData.passwordHash = await hashPassword(data.password);
+    updateData.passwordChangedAt = new Date();
+    updateData.resetPasswordToken = null;
+    updateData.resetPasswordExpires = null;
   }
-  await userToUpdate.save();
-  const user = await User.findById(id).select("-passwordHash");
+
+  await prisma.user.update({
+    where: { id },
+    data: updateData,
+  });
+
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: staffUserPublicSelect,
+  });
   if (!user) throw new AdminError("User not found", "NOT_FOUND");
+
   const auditData = { ...data } as Record<string, unknown>;
   if ("password" in auditData) {
     auditData.password = "[REDACTED]";
   }
   await audit(ctx, "UPDATE", "USER", id, auditData);
-  return user;
+  return withMongoId(user);
 }
 
-export async function deleteStaffUser(ctx: AdminContext, id: string): Promise<void> {
-  await connectDB();
+export async function deleteStaffUser(
+  ctx: AdminContext,
+  id: string
+): Promise<void> {
   if (id === ctx.userId) {
     throw new AdminError("Cannot delete your own account", "FORBIDDEN");
   }
-  const user = await User.findById(id);
+
+  const user = await prisma.user.findUnique({ where: { id } });
   if (!user) throw new AdminError("User not found", "NOT_FOUND");
   if (!MANAGEABLE_ROLES.includes(user.role as StaffRole)) {
     throw new AdminError("This user cannot be deleted here", "FORBIDDEN");
   }
+
   if (user.role === UserRole.ADMIN) {
-    const otherAdmins = await User.countDocuments({
-      role: UserRole.ADMIN,
-      _id: { $ne: user._id },
-      isActive: true,
+    const otherAdmins = await prisma.user.count({
+      where: {
+        role: UserRole.ADMIN,
+        id: { not: user.id },
+        isActive: true,
+      },
     });
     if (otherAdmins === 0) {
       throw new AdminError("Cannot delete the last active admin", "FORBIDDEN");
     }
   }
 
-  await Employee.updateMany(
-    { submittedBy: user._id },
-    {
-      $set: {
-        submittedByName: user.name,
-        submittedByEmail: user.email,
-      },
-    }
-  );
+  await prisma.employee.updateMany({
+    where: { submittedBy: user.id },
+    data: {
+      submittedByName: user.name,
+      submittedByEmail: user.email,
+      updatedAt: new Date(),
+    },
+  });
 
-  await User.findByIdAndDelete(id);
+  await prisma.user.delete({ where: { id } });
   await audit(ctx, "DELETE", "USER", id, {
     email: user.email,
     role: user.role,
@@ -329,23 +590,43 @@ export async function deleteStaffUser(ctx: AdminContext, id: string): Promise<vo
   });
 }
 
-export async function updateOwnProfile(ctx: AdminContext, data: { name?: string; phone?: string; department?: string }) {
-  await connectDB();
-  const user = await User.findByIdAndUpdate(ctx.userId, data, { new: true }).select("-passwordHash");
-  if (!user) throw new AdminError("User not found", "NOT_FOUND");
-  await audit(ctx, "UPDATE", "PROFILE", ctx.userId, data as Record<string, unknown>);
-  return user;
+export async function updateOwnProfile(
+  ctx: AdminContext,
+  data: { name?: string; phone?: string; department?: string }
+) {
+  const existing = await prisma.user.findUnique({ where: { id: ctx.userId } });
+  if (!existing) throw new AdminError("User not found", "NOT_FOUND");
+
+  const user = await prisma.user.update({
+    where: { id: ctx.userId },
+    data: {
+      ...(data.name !== undefined ? { name: data.name } : {}),
+      ...(data.phone !== undefined ? { phone: data.phone } : {}),
+      ...(data.department !== undefined ? { department: data.department } : {}),
+      updatedAt: new Date(),
+    },
+    select: staffUserPublicSelect,
+  });
+
+  await audit(
+    ctx,
+    "UPDATE",
+    "PROFILE",
+    ctx.userId,
+    data as Record<string, unknown>
+  );
+  return withMongoId(user);
 }
 
 export async function getAdminStats() {
-  await connectDB();
-  const [departments, designations, sites, users, activeUsers] = await Promise.all([
-    Department.countDocuments({ isActive: true }),
-    Designation.countDocuments({ isActive: true }),
-    SiteLocation.countDocuments({ isActive: true }),
-    User.countDocuments(),
-    User.countDocuments({ isActive: true }),
-  ]);
+  const [departments, designations, sites, users, activeUsers] =
+    await Promise.all([
+      prisma.department.count({ where: { isActive: true } }),
+      prisma.designation.count({ where: { isActive: true } }),
+      prisma.siteLocation.count({ where: { isActive: true } }),
+      prisma.user.count(),
+      prisma.user.count({ where: { isActive: true } }),
+    ]);
   return { departments, designations, sites, users, activeUsers };
 }
 

@@ -1,7 +1,6 @@
 import { requireStaffAuth } from "@/lib/auth/guards";
-import { UserRole } from "@/types/enums";
-import { connectDB } from "@/lib/db/connect";
-import { User } from "@/lib/db/models/User";
+import { UserRole, StaffRole } from "@/types/enums";
+import { prisma } from "@/lib/db/prisma";
 import { ProfilePageView } from "@/features/auth/components/ProfilePageView";
 
 export const metadata = { title: "Profile | L1" };
@@ -9,8 +8,17 @@ export const metadata = { title: "Profile | L1" };
 export default async function L1ProfilePage() {
   const { user } = await requireStaffAuth(UserRole.L1);
 
-  await connectDB();
-  const dbUser = await User.findById(user.id).lean();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      name: true,
+      email: true,
+      role: true,
+      department: true,
+      phone: true,
+      lastLoginAt: true,
+    },
+  });
 
   if (!dbUser) {
     return <p>User not found.</p>;
@@ -21,7 +29,7 @@ export default async function L1ProfilePage() {
       backHref="/dashboard/l1"
       name={dbUser.name}
       email={dbUser.email}
-      role={dbUser.role}
+      role={dbUser.role as StaffRole}
       department={dbUser.department}
       phone={dbUser.phone}
       lastLoginAt={dbUser.lastLoginAt}

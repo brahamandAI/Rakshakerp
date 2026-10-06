@@ -3,6 +3,7 @@ export enum UserRole {
   SUBMITTER = "SUBMITTER",
   L1 = "L1",
   L2 = "L2",
+  SCANNING = "SCANNING",
   SUPPORT = "SUPPORT",
   ADMIN = "ADMIN",
 }
@@ -16,6 +17,7 @@ export enum EmployeeStatus {
   L2_RETURNED = "L2_RETURNED",
   APPROVED = "APPROVED",
   ID_GENERATED = "ID_GENERATED",
+  SCANNING_COMPLETED = "SCANNING_COMPLETED",
   ID_CARD_ISSUED = "ID_CARD_ISSUED",
   REJECTED = "REJECTED",
 }
@@ -25,6 +27,7 @@ export const STAFF_ROLES = [
   UserRole.SUBMITTER,
   UserRole.L1,
   UserRole.L2,
+  UserRole.SCANNING,
   UserRole.SUPPORT,
   UserRole.ADMIN,
 ] as const;
@@ -34,6 +37,7 @@ export const ROLE_DASHBOARD_PATH: Record<StaffRole, string> = {
   [UserRole.SUBMITTER]: "/dashboard/submitter",
   [UserRole.L1]: "/dashboard/l1",
   [UserRole.L2]: "/dashboard/l2",
+  [UserRole.SCANNING]: "/dashboard/scanning",
   [UserRole.SUPPORT]: "/dashboard/support",
   [UserRole.ADMIN]: "/dashboard/admin",
 };
@@ -42,6 +46,7 @@ export const ROLE_ROUTE_PREFIX: Record<StaffRole, string> = {
   [UserRole.SUBMITTER]: "/dashboard/submitter",
   [UserRole.L1]: "/dashboard/l1",
   [UserRole.L2]: "/dashboard/l2",
+  [UserRole.SCANNING]: "/dashboard/scanning",
   [UserRole.SUPPORT]: "/dashboard/support",
   [UserRole.ADMIN]: "/dashboard/admin",
 };

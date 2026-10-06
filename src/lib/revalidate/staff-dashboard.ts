@@ -18,6 +18,15 @@ export function revalidateL2Dashboard() {
   revalidatePath("/dashboard/l2/applications/rejected");
 }
 
+export function revalidateScanningDashboard() {
+  revalidatePath("/dashboard/scanning");
+  revalidatePath("/dashboard/scanning/applications/pending");
+  revalidatePath("/dashboard/scanning/applications/completed");
+  revalidatePath("/dashboard/scanning/applications/all");
+  revalidatePath("/dashboard/scanning/documents");
+  revalidatePath("/dashboard/scanning/notifications");
+}
+
 export function revalidateSupportDashboard() {
   revalidatePath("/dashboard/support");
   revalidatePath("/dashboard/support/registrations");
@@ -56,6 +65,7 @@ export function revalidateEmployeePortal() {
 export function revalidateAllStaffDashboards() {
   revalidateL1Dashboard();
   revalidateL2Dashboard();
+  revalidateScanningDashboard();
   revalidateSupportDashboard();
   revalidateSubmitterDashboard();
   revalidateAdminDashboard();

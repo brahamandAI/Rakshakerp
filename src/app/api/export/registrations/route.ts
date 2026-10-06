@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   }
 
   const scope = (request.nextUrl.searchParams.get("scope") ?? "") as ExportScope;
-  if (!["l1", "l2", "admin"].includes(scope)) {
+  if (!["l1", "l2", "admin", "scanning"].includes(scope)) {
     return NextResponse.json({ error: "Invalid scope" }, { status: 400 });
   }
 
@@ -29,12 +29,23 @@ export async function GET(request: NextRequest) {
         : scope;
 
     const employeeId = request.nextUrl.searchParams.get("id") ?? undefined;
+    const idsParam = request.nextUrl.searchParams.get("ids");
+    const employeeIds = idsParam
+      ? idsParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined;
+    const dateFrom = request.nextUrl.searchParams.get("dateFrom") ?? undefined;
+    const dateTo = request.nextUrl.searchParams.get("dateTo") ?? undefined;
+
+    const options = { employeeId, employeeIds, dateFrom, dateTo };
 
     if (request.nextUrl.searchParams.get("preview") === "1") {
       const preview = await previewRegistrationsExport(
         effectiveScope,
         session.user.id,
-        { employeeId }
+        options
       );
       return NextResponse.json(preview);
     }
@@ -42,7 +53,7 @@ export async function GET(request: NextRequest) {
     const { filename, xml } = await exportRegistrationsExcel(
       effectiveScope,
       session.user.id,
-      { employeeId }
+      options
     );
 
     return new NextResponse(xml, {

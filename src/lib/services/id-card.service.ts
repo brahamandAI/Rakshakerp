@@ -1,9 +1,5 @@
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
-import { IdCard } from "@/lib/db/models/IdCard";
-import { IdCardDownloadLog } from "@/lib/db/models/IdCardDownloadLog";
+import { prisma } from "@/lib/db/prisma";
+import { newObjectIdString } from "@/lib/db/ids";
 import { EmployeeStatus, UserRole } from "@/types/enums";
 import { DocumentType } from "@/features/onboarding/constants";
 import { generateIdCardPdf } from "@/lib/services/id-card-pdf.service";
@@ -18,6 +14,7 @@ import {
   employeeNotifyContext,
 } from "@/lib/services/notification-dispatch.service";
 import { toClientProps } from "@/lib/serialize/client-props";
+import { asRecord } from "@/lib/services/approval-queue";
 
 export class IdCardError extends Error {
   constructor(
@@ -88,26 +85,44 @@ async function logAction(params: {
   performedBy: string;
   performedByRole: string;
 }) {
-  await IdCardDownloadLog.create({
-    idCardId: params.idCardId
-      ? new mongoose.Types.ObjectId(params.idCardId)
-      : undefined,
-    employeeId: new mongoose.Types.ObjectId(params.employeeId),
-    employeeIdCode: params.employeeIdCode,
-    employeeName: params.employeeName,
-    action: params.action,
-    performedBy: new mongoose.Types.ObjectId(params.performedBy),
-    performedByRole: params.performedByRole,
+  // User FK is required — skip logging if performer missing (should not happen)
+  const performer = await prisma.user.findUnique({
+    where: { id: params.performedBy },
+    select: { id: true },
+  });
+  if (!performer) return;
+
+  let idCardId: string | null = params.idCardId ?? null;
+  if (idCardId) {
+    const card = await prisma.idCard.findUnique({
+      where: { id: idCardId },
+      select: { id: true },
+    });
+    if (!card) idCardId = null;
+  }
+
+  await prisma.idCardDownloadLog.create({
+    data: {
+      id: newObjectIdString(),
+      idCardId,
+      employeeId: params.employeeId,
+      employeeIdCode: params.employeeIdCode,
+      employeeName: params.employeeName,
+      action: params.action,
+      performedBy: performer.id,
+      performedByRole: params.performedByRole,
+      createdAt: new Date(),
+    },
   });
 }
 
-function extractPersonalDetails(employee: { personalDetails?: Record<string, unknown> }) {
-  const personal = employee.personalDetails as {
+function extractPersonalDetails(employee: { personalDetails?: unknown }) {
+  const personal = asRecord(employee.personalDetails) as {
     fullName?: string;
     postAppliedFor?: string;
     bloodGroup?: string;
     dateOfBirth?: string;
-  } | undefined;
+  } | null;
 
   return {
     fullName: personal?.fullName ?? "Unknown",
@@ -117,13 +132,13 @@ function extractPersonalDetails(employee: { personalDetails?: Record<string, unk
   };
 }
 
-function extractAddress(employee: { address?: Record<string, unknown> }) {
-  const addr = employee.address as {
+function extractAddress(employee: { address?: unknown }) {
+  const addr = asRecord(employee.address) as {
     localAddress?: string;
     permanentAddress?: string;
     present?: Record<string, string>;
     permanent?: Record<string, string>;
-  } | undefined;
+  } | null;
 
   if (addr?.localAddress) return addr.localAddress;
   if (addr?.permanentAddress) return addr.permanentAddress;
@@ -150,10 +165,8 @@ function deriveDepartment(postAppliedFor?: string): string {
   return postAppliedFor;
 }
 
-function deriveBranch(employee: {
-  address?: Record<string, unknown>;
-}): string {
-  const addr = employee.address as { localAddress?: string } | undefined;
+function deriveBranch(employee: { address?: unknown }): string {
+  const addr = asRecord(employee.address) as { localAddress?: string } | null;
   const local = addr?.localAddress ?? "";
   const districtMatch = local.match(/,\s*([^,]+),\s*\d{6}/);
   if (districtMatch?.[1]) return districtMatch[1].trim();
@@ -164,16 +177,29 @@ function deriveBranch(employee: {
 export async function fetchEmployeeDataForIdCard(
   employeeId: string
 ): Promise<EmployeeIdCardData | null> {
-  await connectDB();
-
-  const employee = await Employee.findById(employeeId).lean();
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      id: true,
+      applicationRef: true,
+      employeeId: true,
+      phone: true,
+      email: true,
+      status: true,
+      personalDetails: true,
+      address: true,
+    },
+  });
   if (!employee || !employee.employeeId) return null;
 
-  const photo = await EmployeeDocument.findOne({
-    employeeId,
-    documentType: DocumentType.PHOTO,
-    isActive: true,
-  }).lean();
+  const photo = await prisma.employeeDocument.findFirst({
+    where: {
+      employeeId,
+      documentType: DocumentType.PHOTO,
+      isActive: true,
+    },
+    select: { url: true },
+  });
 
   const personal = extractPersonalDetails(employee);
   const designation = personal.postAppliedFor;
@@ -181,7 +207,7 @@ export async function fetchEmployeeDataForIdCard(
   const branch = deriveBranch(employee);
 
   return {
-    employeeId: String(employee._id),
+    employeeId: employee.id,
     applicationRef: employee.applicationRef,
     employeeIdCode: employee.employeeId,
     fullName: personal.fullName,
@@ -195,11 +221,14 @@ export async function fetchEmployeeDataForIdCard(
     bloodGroup: personal.bloodGroup,
     dateOfBirth: personal.dateOfBirth,
     address: extractAddress(employee),
-    status: employee.status,
+    status: employee.status as EmployeeStatus,
   };
 }
 
-async function buildQrDataUrl(data: EmployeeIdCardData, issueDate: Date): Promise<string> {
+async function buildQrDataUrl(
+  data: EmployeeIdCardData,
+  issueDate: Date
+): Promise<string> {
   const payload = buildEmployeeQrPayload({
     employeeIdCode: data.employeeIdCode,
     fullName: data.fullName,
@@ -213,17 +242,19 @@ async function buildQrDataUrl(data: EmployeeIdCardData, issueDate: Date): Promis
   return generateQrCodeDataUrl(serializeQrPayload(payload), 160);
 }
 
+async function findActiveIdCard(employeeId: string) {
+  return prisma.idCard.findFirst({
+    where: { employeeId, status: "ACTIVE" },
+  });
+}
+
 export async function getIdCardPreviewData(
   employeeId: string
 ): Promise<IdCardPreviewData | null> {
   const data = await fetchEmployeeDataForIdCard(employeeId);
   if (!data) return null;
 
-  await connectDB();
-  const activeCard = await IdCard.findOne({
-    employeeId,
-    status: "ACTIVE",
-  }).lean();
+  const activeCard = await findActiveIdCard(employeeId);
 
   const issueDate = activeCard?.issueDate ?? new Date();
   const expiryDate = activeCard?.expiryDate ?? addYears(issueDate, 2);
@@ -236,8 +267,8 @@ export async function getIdCardPreviewData(
     qrCodeDataUrl,
     hasActiveIdCard: !!activeCard,
     idCardUrl: activeCard?.downloadUrl ?? activeCard?.url,
-    idCardId: activeCard ? String(activeCard._id) : undefined,
-    cardStatus: activeCard?.cardStatus,
+    idCardId: activeCard ? activeCard.id : undefined,
+    cardStatus: activeCard?.cardStatus ?? undefined,
     completedAt: activeCard?.completedAt?.toISOString(),
   });
 }
@@ -246,17 +277,19 @@ export async function recordIdCardPreview(
   employeeId: string,
   supportUserId: string
 ): Promise<void> {
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { employeeId: true, personalDetails: true },
+  });
   if (!employee?.employeeId) {
     throw new IdCardError("Employee not found or missing ID", "NOT_FOUND");
   }
 
   const { fullName } = extractPersonalDetails(employee);
-  const activeCard = await IdCard.findOne({ employeeId, status: "ACTIVE" });
+  const activeCard = await findActiveIdCard(employeeId);
 
   await logAction({
-    idCardId: activeCard?._id.toString(),
+    idCardId: activeCard?.id,
     employeeId,
     employeeIdCode: employee.employeeId,
     employeeName: fullName,
@@ -270,15 +303,16 @@ export async function generateIdCardForEmployee(
   employeeId: string,
   supportUserId: string
 ): Promise<{ idCardId: string; url: string }> {
-  await connectDB();
-
   const data = await fetchEmployeeDataForIdCard(employeeId);
   if (!data) {
     throw new IdCardError("Employee not found or missing employee ID", "NOT_FOUND");
   }
 
   const allowed = [EmployeeStatus.ID_GENERATED, EmployeeStatus.APPROVED];
-  if (!allowed.includes(data.status) && data.status !== EmployeeStatus.ID_CARD_ISSUED) {
+  if (
+    !allowed.includes(data.status) &&
+    data.status !== EmployeeStatus.ID_CARD_ISSUED
+  ) {
     throw new IdCardError(
       "Employee is not eligible for ID card generation",
       "INVALID_STATUS"
@@ -287,7 +321,6 @@ export async function generateIdCardForEmployee(
 
   const issueDate = new Date();
   const expiryDate = addYears(issueDate, 2);
-
   const qrCodeDataUrl = await buildQrDataUrl(data, issueDate);
 
   const pdfBuffer = await generateIdCardPdf({
@@ -311,22 +344,29 @@ export async function generateIdCardForEmployee(
     data.employeeIdCode
   );
 
-  await IdCard.updateMany(
-    { employeeId, status: "ACTIVE" },
-    { status: "SUPERSEDED", cardStatus: "SUPERSEDED" }
-  );
+  const generator = await prisma.user.findUnique({
+    where: { id: supportUserId },
+    select: { id: true },
+  });
 
-  const idCard = await IdCard.create({
-    employeeId: new mongoose.Types.ObjectId(employeeId),
+  /**
+   * Prisma IdCard.employeeId is @unique (1 card row per employee).
+   * Mongo could supersede + insert; here we upsert the single row in place.
+   */
+  const existing = await prisma.idCard.findUnique({
+    where: { employeeId },
+  });
+
+  const cardFields = {
     employeeIdCode: data.employeeIdCode,
     employeeName: data.fullName,
-    photoUrl: data.photoUrl,
-    designation: data.designation,
-    department: data.department,
-    branch: data.branch,
-    bloodGroup: data.bloodGroup,
-    dateOfBirth: data.dateOfBirth,
-    address: data.address,
+    photoUrl: data.photoUrl ?? null,
+    designation: data.designation ?? null,
+    department: data.department ?? null,
+    branch: data.branch ?? null,
+    bloodGroup: data.bloodGroup ?? null,
+    dateOfBirth: data.dateOfBirth ?? null,
+    address: data.address ?? null,
     qrCodeUrl: qrCodeDataUrl,
     issueDate,
     expiryDate,
@@ -335,12 +375,29 @@ export async function generateIdCardForEmployee(
     format: "PDF",
     status: "ACTIVE",
     cardStatus: "GENERATED",
-    generatedBy: new mongoose.Types.ObjectId(supportUserId),
+    generatedBy: generator?.id ?? null,
+    completedAt: null,
+    completedBy: null,
     generatedAt: issueDate,
-  });
+    updatedAt: issueDate,
+  };
+
+  const idCard = existing
+    ? await prisma.idCard.update({
+        where: { id: existing.id },
+        data: cardFields,
+      })
+    : await prisma.idCard.create({
+        data: {
+          id: newObjectIdString(),
+          employeeId,
+          createdAt: issueDate,
+          ...cardFields,
+        },
+      });
 
   await logAction({
-    idCardId: idCard._id.toString(),
+    idCardId: idCard.id,
     employeeId,
     employeeIdCode: data.employeeIdCode,
     employeeName: data.fullName,
@@ -349,27 +406,29 @@ export async function generateIdCardForEmployee(
     performedByRole: UserRole.SUPPORT,
   });
 
-  return { idCardId: idCard._id.toString(), url: upload.url };
+  return { idCardId: idCard.id, url: upload.url };
 }
 
 export async function recordIdCardDownload(
   idCardId: string,
   supportUserId: string
 ): Promise<{ url: string; fileName: string }> {
-  await connectDB();
-  const idCard = await IdCard.findById(idCardId);
+  const idCard = await prisma.idCard.findUnique({ where: { id: idCardId } });
   if (!idCard || idCard.status !== "ACTIVE") {
     throw new IdCardError("ID card not found", "NOT_FOUND");
   }
 
-  const employee = await Employee.findById(idCard.employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: idCard.employeeId },
+    select: { id: true, personalDetails: true },
+  });
   if (!employee) throw new IdCardError("Employee not found", "NOT_FOUND");
 
   const { fullName } = extractPersonalDetails(employee);
 
   await logAction({
     idCardId,
-    employeeId: String(employee._id),
+    employeeId: employee.id,
     employeeIdCode: idCard.employeeIdCode,
     employeeName: fullName,
     action: "DOWNLOAD",
@@ -386,8 +445,7 @@ export async function getIdCardDownloadUrl(idCardId: string): Promise<{
   url: string;
   fileName: string;
 } | null> {
-  await connectDB();
-  const idCard = await IdCard.findById(idCardId).lean();
+  const idCard = await prisma.idCard.findUnique({ where: { id: idCardId } });
   if (!idCard || idCard.status !== "ACTIVE") return null;
 
   return {
@@ -400,27 +458,51 @@ export async function markIdCardCompleted(
   employeeId: string,
   supportUserId: string
 ): Promise<void> {
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new IdCardError("Employee not found", "NOT_FOUND");
 
-  const activeCard = await IdCard.findOne({ employeeId, status: "ACTIVE" });
+  const activeCard = await findActiveIdCard(employeeId);
   if (!activeCard) {
-    throw new IdCardError("Generate ID card before marking completed", "NO_ID_CARD");
+    throw new IdCardError(
+      "Generate ID card before marking completed",
+      "NO_ID_CARD"
+    );
   }
 
-  employee.status = EmployeeStatus.ID_CARD_ISSUED;
-  await employee.save();
+  const completer = await prisma.user.findUnique({
+    where: { id: supportUserId },
+    select: { id: true },
+  });
 
-  activeCard.completedAt = new Date();
-  activeCard.completedBy = new mongoose.Types.ObjectId(supportUserId);
-  activeCard.cardStatus = "COMPLETED";
-  await activeCard.save();
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.ID_CARD_ISSUED,
+        updatedAt: new Date(),
+      },
+    }),
+    prisma.idCard.update({
+      where: { id: activeCard.id },
+      data: {
+        completedAt: new Date(),
+        completedBy: completer?.id ?? null,
+        cardStatus: "COMPLETED",
+        updatedAt: new Date(),
+      },
+    }),
+  ]);
 
-  const { fullName } = extractPersonalDetails(employee);
+  const { fullName } = extractPersonalDetails({
+    personalDetails: (employee.personalDetails ?? undefined) as
+      | Record<string, unknown>
+      | undefined,
+  });
 
   await logAction({
-    idCardId: activeCard._id.toString(),
+    idCardId: activeCard.id,
     employeeId,
     employeeIdCode: activeCard.employeeIdCode,
     employeeName: fullName,
@@ -431,10 +513,12 @@ export async function markIdCardCompleted(
 
   await dispatchIdCardGenerated(
     employeeNotifyContext({
-      _id: employee._id,
+      _id: employee.id,
       applicationRef: employee.applicationRef,
-      employeeId: employee.employeeId,
-      personalDetails: employee.personalDetails as Record<string, unknown>,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
     })
   );
 }

@@ -1,7 +1,5 @@
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db/connect";
-import { Notification } from "@/lib/db/models/Notification";
-import { User } from "@/lib/db/models/User";
+import { prisma } from "@/lib/db/prisma";
+import { newObjectIdString } from "@/lib/db/ids";
 import { UserRole } from "@/types/enums";
 import {
   NotificationType,
@@ -20,35 +18,110 @@ export interface CreateNotificationParams {
   linkUrl?: string;
 }
 
-function mapNotification(doc: Record<string, unknown>): NotificationViewModel {
+type NotificationRow = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  readAt: Date | null;
+  createdAt: Date;
+  linkUrl: string | null;
+  applicationRef: string | null;
+  employeeId: string | null;
+};
+
+function mapNotification(doc: NotificationRow): NotificationViewModel {
   return {
-    _id: String(doc._id),
+    _id: doc.id,
     type: doc.type as NotificationType,
-    title: String(doc.title),
-    body: String(doc.body),
-    readAt: doc.readAt ? new Date(doc.readAt as Date).toISOString() : undefined,
-    createdAt: new Date(doc.createdAt as Date).toISOString(),
-    linkUrl: doc.linkUrl as string | undefined,
-    applicationRef: doc.applicationRef as string | undefined,
-    employeeId: doc.employeeId ? String(doc.employeeId) : undefined,
+    title: doc.title,
+    body: doc.body,
+    readAt: doc.readAt ? doc.readAt.toISOString() : undefined,
+    createdAt: doc.createdAt.toISOString(),
+    linkUrl: doc.linkUrl ?? undefined,
+    applicationRef: doc.applicationRef ?? undefined,
+    employeeId: doc.employeeId ?? undefined,
   };
+}
+
+const listSelect = {
+  id: true,
+  type: true,
+  title: true,
+  body: true,
+  readAt: true,
+  createdAt: true,
+  linkUrl: true,
+  applicationRef: true,
+  employeeId: true,
+} as const;
+
+/**
+ * Staff notifications: recipientId is a User id (FK).
+ * Employee notifications: recipientId cannot be an Employee id (User FK),
+ * so the employee id is stored in recipientLegacyId (+ employeeId), matching
+ * the Mongo→PG migration layout.
+ */
+function staffRecipientWhere(userId: string) {
+  return {
+    OR: [
+      {
+        recipientId: userId,
+        recipientType: { in: ["STAFF", ""] },
+      },
+      {
+        recipientLegacyId: userId,
+        recipientType: { in: ["STAFF", ""] },
+      },
+    ],
+  };
+}
+
+function employeeRecipientWhere(employeeId: string) {
+  return {
+    recipientType: "EMPLOYEE",
+    OR: [
+      { recipientLegacyId: employeeId },
+      { employeeId },
+    ],
+  };
+}
+
+function recipientWhere(
+  recipientType: NotificationRecipientType,
+  recipientId: string
+) {
+  if (recipientType === "STAFF") {
+    return {
+      recipientType: "STAFF",
+      OR: [{ recipientId }, { recipientLegacyId: recipientId }],
+    };
+  }
+  return employeeRecipientWhere(recipientId);
 }
 
 export async function createNotification(
   params: CreateNotificationParams
 ): Promise<void> {
-  await connectDB();
-  await Notification.create({
-    recipientType: params.recipientType,
-    recipientId: new mongoose.Types.ObjectId(params.recipientId),
-    type: params.type,
-    title: params.title,
-    body: params.body,
-    employeeId: params.employeeId
-      ? new mongoose.Types.ObjectId(params.employeeId)
-      : undefined,
-    applicationRef: params.applicationRef,
-    linkUrl: params.linkUrl,
+  const now = new Date();
+  const isEmployeeRecipient = params.recipientType === "EMPLOYEE";
+  const linkedEmployeeId = params.employeeId ?? (isEmployeeRecipient ? params.recipientId : undefined);
+
+  await prisma.notification.create({
+    data: {
+      id: newObjectIdString(),
+      recipientType: params.recipientType,
+      // User FK: only set recipientId for STAFF users that exist in `users`
+      recipientId: isEmployeeRecipient ? null : params.recipientId,
+      recipientLegacyId: isEmployeeRecipient ? params.recipientId : null,
+      type: params.type,
+      title: params.title,
+      body: params.body,
+      employeeId: linkedEmployeeId ?? null,
+      applicationRef: params.applicationRef ?? null,
+      linkUrl: params.linkUrl ?? null,
+      createdAt: now,
+    },
   });
 }
 
@@ -67,13 +140,16 @@ export async function notifyStaffByRole(
     return;
   }
 
-  await connectDB();
-  const users = await User.find({ role, isActive: true }).lean();
+  const users = await prisma.user.findMany({
+    where: { role, isActive: true },
+    select: { id: true },
+  });
+
   for (const user of users) {
     await createNotification({
       ...params,
       recipientType: "STAFF",
-      recipientId: String(user._id),
+      recipientId: user.id,
     });
   }
 }
@@ -83,50 +159,48 @@ export async function getNotificationHistory(
   recipientId: string,
   limit = 50
 ): Promise<NotificationViewModel[]> {
-  await connectDB();
-  const items = await Notification.find({ recipientType, recipientId })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
+  const items = await prisma.notification.findMany({
+    where: recipientWhere(recipientType, recipientId),
+    select: listSelect,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
 
-  return items.map((n) => mapNotification(n as Record<string, unknown>));
+  return items.map(mapNotification);
 }
 
 /** @deprecated Use getNotificationHistory */
 export async function getNotificationsForUser(userId: string, limit = 20) {
-  await connectDB();
-  return Notification.find({
-    $or: [
-      { recipientType: "STAFF", recipientId: userId },
-      { recipientId: userId, recipientType: { $exists: false } },
-    ],
-  })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
+  const items = await prisma.notification.findMany({
+    where: staffRecipientWhere(userId),
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return items.map((n) => ({
+    ...n,
+    _id: n.id,
+  }));
 }
 
 export async function getUnreadCount(
   recipientType: NotificationRecipientType,
   recipientId: string
 ): Promise<number> {
-  await connectDB();
-  return Notification.countDocuments({
-    recipientType,
-    recipientId,
-    readAt: { $exists: false },
+  return prisma.notification.count({
+    where: {
+      ...recipientWhere(recipientType, recipientId),
+      readAt: null,
+    },
   });
 }
 
 /** Staff unread — includes legacy notifications without recipientType */
 export async function getStaffUnreadCount(userId: string): Promise<number> {
-  await connectDB();
-  return Notification.countDocuments({
-    readAt: { $exists: false },
-    $or: [
-      { recipientType: "STAFF", recipientId: userId },
-      { recipientId: userId, recipientType: { $exists: false } },
-    ],
+  return prisma.notification.count({
+    where: {
+      readAt: null,
+      ...staffRecipientWhere(userId),
+    },
   });
 }
 
@@ -135,76 +209,66 @@ export async function markNotificationRead(
   recipientType: NotificationRecipientType,
   recipientId: string
 ): Promise<void> {
-  await connectDB();
-  await Notification.findOneAndUpdate(
-    {
-      _id: notificationId,
-      recipientType,
-      recipientId,
+  await prisma.notification.updateMany({
+    where: {
+      id: notificationId,
+      ...recipientWhere(recipientType, recipientId),
     },
-    { readAt: new Date() }
-  );
+    data: { readAt: new Date() },
+  });
 }
 
 export async function markStaffNotificationRead(
   notificationId: string,
   userId: string
 ): Promise<void> {
-  await connectDB();
-  await Notification.findOneAndUpdate(
-    {
-      _id: notificationId,
-      readAt: { $exists: false },
-      $or: [
-        { recipientType: "STAFF", recipientId: userId },
-        { recipientId: userId, recipientType: { $exists: false } },
-      ],
+  await prisma.notification.updateMany({
+    where: {
+      id: notificationId,
+      readAt: null,
+      ...staffRecipientWhere(userId),
     },
-    { readAt: new Date() }
-  );
+    data: { readAt: new Date() },
+  });
 }
 
 export async function markAllNotificationsRead(
   recipientType: NotificationRecipientType,
   recipientId: string
 ): Promise<void> {
-  await connectDB();
-  await Notification.updateMany(
-    { recipientType, recipientId, readAt: { $exists: false } },
-    { readAt: new Date() }
-  );
+  await prisma.notification.updateMany({
+    where: {
+      ...recipientWhere(recipientType, recipientId),
+      readAt: null,
+    },
+    data: { readAt: new Date() },
+  });
 }
 
-export async function markAllStaffNotificationsRead(userId: string): Promise<void> {
-  await connectDB();
-  await Notification.updateMany(
-    {
-      readAt: { $exists: false },
-      $or: [
-        { recipientType: "STAFF", recipientId: userId },
-        { recipientId: userId, recipientType: { $exists: false } },
-      ],
+export async function markAllStaffNotificationsRead(
+  userId: string
+): Promise<void> {
+  await prisma.notification.updateMany({
+    where: {
+      readAt: null,
+      ...staffRecipientWhere(userId),
     },
-    { readAt: new Date() }
-  );
+    data: { readAt: new Date() },
+  });
 }
 
 export async function getStaffNotificationHistory(
   userId: string,
   limit = 50
 ): Promise<NotificationViewModel[]> {
-  await connectDB();
-  const items = await Notification.find({
-    $or: [
-      { recipientType: "STAFF", recipientId: userId },
-      { recipientId: userId, recipientType: { $exists: false } },
-    ],
-  })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
+  const items = await prisma.notification.findMany({
+    where: staffRecipientWhere(userId),
+    select: listSelect,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
 
-  return items.map((n) => mapNotification(n as Record<string, unknown>));
+  return items.map(mapNotification);
 }
 
 export async function getEmployeeNotificationHistory(
@@ -214,6 +278,8 @@ export async function getEmployeeNotificationHistory(
   return getNotificationHistory("EMPLOYEE", employeeId, limit);
 }
 
-export async function getEmployeeUnreadCount(employeeId: string): Promise<number> {
+export async function getEmployeeUnreadCount(
+  employeeId: string
+): Promise<number> {
   return getUnreadCount("EMPLOYEE", employeeId);
 }

@@ -52,7 +52,7 @@ export function StaffLoginForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-0" noValidate>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6" noValidate>
       <StaffSignInFormFields
         idPrefix="page-"
         role={role}
@@ -63,7 +63,7 @@ export function StaffLoginForm({
       {formError && (
         <div
           role="alert"
-          className="mt-5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-medium text-red-700"
+          className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm font-medium text-red-700"
         >
           {formError}
         </div>
@@ -72,7 +72,7 @@ export function StaffLoginForm({
       <Button
         type="submit"
         variant="default"
-        className="mt-7 h-12 w-full text-[0.95rem] shadow-lg shadow-[#0B1F3A]/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-[#0B1F3A]/25"
+        className="h-12 w-full text-[0.95rem] shadow-lg shadow-[#0B1F3A]/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-[#0B1F3A]/25"
         isLoading={isLoading}
       >
         {isLoading ? "Signing in…" : "Sign In"}

@@ -1,7 +1,8 @@
 "use server";
 
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
+import { newObjectIdString } from "@/lib/db/ids";
+import { Prisma } from "@/generated/prisma/client";
 import { EmployeeStatus, UserRole } from "@/types/enums";
 import { generateApplicationRef } from "@/lib/utils";
 import { z } from "zod";
@@ -13,8 +14,11 @@ import {
 import { mapStep1DataToEmployeeFields } from "@/lib/services/onboarding.service";
 import { STEP_SCHEMAS } from "@/features/onboarding/schemas/onboarding.schema";
 import { auth } from "@/lib/auth/config";
-import mongoose from "mongoose";
 import { getSubmitterSnapshot } from "@/lib/services/submitter-snapshot";
+import {
+  assertNoDuplicateApplicant,
+  DuplicateApplicantError,
+} from "@/lib/services/duplicate-applicant";
 
 export type RegisterResult =
   | { success: true; applicationRef: string }
@@ -35,7 +39,6 @@ async function getSubmitterId(): Promise<string | undefined> {
   return undefined;
 }
 
-
 export async function registerEmployeeAction(
   formData: FormData
 ): Promise<RegisterResult> {
@@ -52,55 +55,77 @@ export async function registerEmployeeAction(
     };
   }
 
+  const email = parsed.data.email.toLowerCase();
+
   try {
-    await connectDB();
+    const activeApplication = await prisma.employee.findFirst({
+      where: {
+        email,
+        status: {
+          notIn: [EmployeeStatus.REJECTED, EmployeeStatus.ID_CARD_ISSUED],
+        },
+      },
+      select: { id: true },
+    });
+
+    if (activeApplication) {
+      return {
+        success: false,
+        error:
+          "An active application already exists for this email. Please return to the registration page to continue.",
+      };
+    }
+
+    try {
+      await assertNoDuplicateApplicant(null, {
+        fullName: parsed.data.fullName,
+        phone: parsed.data.phone,
+      });
+    } catch (error) {
+      if (error instanceof DuplicateApplicantError) {
+        return { success: false, error: error.message };
+      }
+      throw error;
+    }
+
+    const applicationRef = generateApplicationRef();
+    const submitterId = await getSubmitterId();
+    const submitterSnapshot = await getSubmitterSnapshot(submitterId);
+    const now = new Date();
+
+    const employee = await prisma.employee.create({
+      data: {
+        id: newObjectIdString(),
+        applicationRef,
+        email,
+        phone: parsed.data.phone,
+        personalDetails: { fullName: parsed.data.fullName },
+        status: EmployeeStatus.DRAFT,
+        currentStep: 1,
+        completedSteps: [],
+        createdAt: now,
+        updatedAt: now,
+        ...(submitterId
+          ? {
+              submittedBy: submitterId,
+              ...submitterSnapshot,
+            }
+          : {}),
+      },
+    });
+
+    const token = await createEmployeeSession({
+      employeeId: employee.id,
+      applicationRef: employee.applicationRef,
+      email: employee.email,
+    });
+
+    await setEmployeeSessionCookie(token);
+
+    return { success: true, applicationRef };
   } catch (error) {
     return { success: false, error: dbErrorMessage(error) };
   }
-
-  const email = parsed.data.email.toLowerCase();
-
-  const activeApplication = await Employee.findOne({
-    email,
-    status: {
-      $nin: [EmployeeStatus.REJECTED, EmployeeStatus.ID_CARD_ISSUED],
-    },
-  }).lean();
-
-  if (activeApplication) {
-    return {
-      success: false,
-      error:
-        "An active application already exists for this email. Please return to the registration page to continue.",
-    };
-  }
-
-  const applicationRef = generateApplicationRef();
-  const submitterId = await getSubmitterId();
-  const submitterSnapshot = await getSubmitterSnapshot(submitterId);
-
-  const employee = await Employee.create({
-    applicationRef,
-    email,
-    phone: parsed.data.phone,
-    personalDetails: { fullName: parsed.data.fullName },
-    status: EmployeeStatus.DRAFT,
-    currentStep: 1,
-    completedSteps: [],
-    ...(submitterId
-      ? { submittedBy: new mongoose.Types.ObjectId(submitterId), ...submitterSnapshot }
-      : {}),
-  });
-
-  const token = await createEmployeeSession({
-    employeeId: employee._id.toString(),
-    applicationRef: employee.applicationRef,
-    email: employee.email,
-  });
-
-  await setEmployeeSessionCookie(token);
-
-  return { success: true, applicationRef };
 }
 
 export async function registerAndSaveStep1Action(
@@ -128,66 +153,93 @@ export async function registerAndSaveStep1Action(
     };
   }
 
+  const email = parsed.data.email.toLowerCase();
+
   try {
-    await connectDB();
+    if (email) {
+      const activeApplication = await prisma.employee.findFirst({
+        where: {
+          email,
+          status: {
+            notIn: [EmployeeStatus.REJECTED, EmployeeStatus.ID_CARD_ISSUED],
+          },
+        },
+        select: { id: true },
+      });
+
+      if (activeApplication) {
+        return {
+          success: false,
+          error:
+            "An active application already exists for this email. Please return to the registration page to continue.",
+        };
+      }
+    }
+
+    const stepFields = mapStep1DataToEmployeeFields(stepResult.data);
+    const personal = stepFields.personalDetails as {
+      fullName?: string;
+      aadhaarNumber?: string;
+    };
+
+    try {
+      await assertNoDuplicateApplicant(null, {
+        fullName: personal.fullName ?? parsed.data.fullName,
+        phone: parsed.data.phone,
+        aadhaarNumber: personal.aadhaarNumber,
+      });
+    } catch (error) {
+      if (error instanceof DuplicateApplicantError) {
+        return { success: false, error: error.message };
+      }
+      throw error;
+    }
+
+    const applicationRef = generateApplicationRef();
+    const now = new Date();
+    const submitterId = await getSubmitterId();
+    const submitterSnapshot = await getSubmitterSnapshot(submitterId);
+
+    const employee = await prisma.employee.create({
+      data: {
+        id: newObjectIdString(),
+        applicationRef,
+        email,
+        phone: parsed.data.phone,
+        personalDetails: {
+          ...stepFields.personalDetails,
+          fullName:
+            (stepFields.personalDetails.fullName as string | undefined) ??
+            parsed.data.fullName,
+        } as Prisma.InputJsonValue,
+        address: stepFields.address as Prisma.InputJsonValue,
+        education: stepFields.education as Prisma.InputJsonValue,
+        additionalDetails: stepFields.additionalDetails as Prisma.InputJsonValue,
+        status: EmployeeStatus.DRAFT,
+        currentStep: 2,
+        completedSteps: [1],
+        lastSavedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        ...(submitterId
+          ? {
+              submittedBy: submitterId,
+              ...submitterSnapshot,
+            }
+          : {}),
+      },
+    });
+
+    const token = await createEmployeeSession({
+      employeeId: employee.id,
+      applicationRef: employee.applicationRef,
+      email: employee.email,
+    });
+
+    await setEmployeeSessionCookie(token);
+
+    return { success: true, applicationRef };
   } catch (error) {
     return { success: false, error: dbErrorMessage(error) };
   }
-
-  const email = parsed.data.email.toLowerCase();
-
-  if (email) {
-    const activeApplication = await Employee.findOne({
-      email,
-      status: {
-        $nin: [EmployeeStatus.REJECTED, EmployeeStatus.ID_CARD_ISSUED],
-      },
-    }).lean();
-
-    if (activeApplication) {
-      return {
-        success: false,
-        error:
-          "An active application already exists for this email. Please return to the registration page to continue.",
-      };
-    }
-  }
-
-  const applicationRef = generateApplicationRef();
-  const stepFields = mapStep1DataToEmployeeFields(stepResult.data);
-  const now = new Date();
-  const submitterId = await getSubmitterId();
-  const submitterSnapshot = await getSubmitterSnapshot(submitterId);
-
-  const employee = await Employee.create({
-    applicationRef,
-    email,
-    phone: parsed.data.phone,
-    personalDetails: {
-      ...stepFields.personalDetails,
-      fullName:
-        (stepFields.personalDetails.fullName as string | undefined) ??
-        parsed.data.fullName,
-    },
-    address: stepFields.address,
-    education: stepFields.education,
-    additionalDetails: stepFields.additionalDetails,
-    status: EmployeeStatus.DRAFT,
-    currentStep: 2,
-    completedSteps: [1],
-    lastSavedAt: now,
-    ...(submitterId
-      ? { submittedBy: new mongoose.Types.ObjectId(submitterId), ...submitterSnapshot }
-      : {}),
-  });
-
-  const token = await createEmployeeSession({
-    employeeId: employee._id.toString(),
-    applicationRef: employee.applicationRef,
-    email: employee.email,
-  });
-
-  await setEmployeeSessionCookie(token);
-
-  return { success: true, applicationRef };
 }

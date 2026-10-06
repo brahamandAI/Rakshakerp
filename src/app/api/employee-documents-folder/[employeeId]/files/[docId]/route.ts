@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { StaffRole } from "@/types/enums";
-import { connectDB } from "@/lib/db/connect";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
+import { prisma } from "@/lib/db/prisma";
 import {
   canAccessDocumentsFolder,
   getEmployeeDocumentsFolder,
@@ -47,11 +46,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     );
   }
 
-  await connectDB();
-  const doc = await EmployeeDocument.findOne({
-    _id: docId,
-    employeeId,
-    isActive: true,
+  const doc = await prisma.employeeDocument.findFirst({
+    where: {
+      id: docId,
+      employeeId,
+      isActive: true,
+    },
   });
   if (!doc) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });

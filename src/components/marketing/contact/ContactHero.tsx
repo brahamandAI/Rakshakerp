@@ -20,7 +20,7 @@ export function ContactHero() {
       />
       <div className="absolute inset-0 bg-gradient-to-r from-primary/95 via-primary/88 to-primary/75" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_20%,_rgba(212,175,55,0.18)_0%,_transparent_55%)]" />
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#F8FAFC] to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#F4F9FC] to-transparent" />
 
       <div className="relative mx-auto flex max-w-7xl flex-col justify-center px-4 py-16 lg:px-8 lg:py-20">
         <MotionReveal>

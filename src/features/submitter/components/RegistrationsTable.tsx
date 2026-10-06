@@ -15,6 +15,13 @@ import {
   getRegistrationSearchValue,
   matchesRegistrationSearch,
 } from "@/lib/ui/registration-search";
+import {
+  ListExportToolbar,
+  toggleIdSelection,
+  useSyncedSelection,
+} from "@/features/export/components/ListExportToolbar";
+import type { ExportButtonScope } from "@/features/export/components/DownloadExcelButton";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface RegistrationsTableProps {
   registrations: SubmitterRegistrationItem[];
@@ -24,6 +31,7 @@ interface RegistrationsTableProps {
   allowSubmitterEdit?: boolean;
   showSubmitter?: boolean;
   initialStatusFilter?: string;
+  exportScope?: ExportButtonScope;
 }
 
 const EDITABLE = new Set([
@@ -51,6 +59,7 @@ export function RegistrationsTable({
   allowSubmitterEdit = false,
   showSubmitter = false,
   initialStatusFilter = "all",
+  exportScope,
 }: RegistrationsTableProps) {
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -61,8 +70,11 @@ export function RegistrationsTable({
     (row) => row.submittedAt,
     (row) => row.fullName,
     initialStatusFilter,
-    (row, field, query) => matchesRegistrationSearch(row, field, query)
+    (row, field, query) => matchesRegistrationSearch(row, field, query),
+    (row) => row._id
   );
+  const { selectedIds, setSelectedIds } = useSyncedSelection(list.filteredIds);
+  const enableExport = Boolean(exportScope);
 
   if (registrations.length === 0) {
     return <EmptyState title={emptyMessage} description="Submitted registrations will appear here." />;
@@ -104,13 +116,29 @@ export function RegistrationsTable({
         page={list.page}
         pageCount={list.pageCount}
         onPageChange={list.setPage}
+        showDateFilter={enableExport}
+        dateFrom={list.dateFrom}
+        dateTo={list.dateTo}
+        onDateFromChange={list.setDateFrom}
+        onDateToChange={list.setDateTo}
       />
+
+      {enableExport && exportScope && (
+        <ListExportToolbar
+          scope={exportScope}
+          filteredIds={list.filteredIds}
+          dateFrom={list.dateFrom}
+          dateTo={list.dateTo}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+        />
+      )}
 
       {list.total === 0 ? (
         <div className="p-4">
           <EmptyState
             title="No matching registrations"
-            description="Try a different search or approval status."
+            description="Try a different search, date range, or approval status."
           />
         </div>
       ) : (
@@ -119,6 +147,11 @@ export function RegistrationsTable({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                  {enableExport && (
+                    <th className="w-10 px-3 py-3 text-left">
+                      <span className="sr-only">Select</span>
+                    </th>
+                  )}
                   <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
                     Application Ref
                   </th>
@@ -152,6 +185,20 @@ export function RegistrationsTable({
                     key={row._id}
                     className="border-b border-[#E2E8F0] last:border-0 transition-colors hover:bg-[#F8FAFC]"
                   >
+                    {enableExport && (
+                      <td className="px-3 py-3 align-middle">
+                        <Checkbox
+                          id={`reg-select-${row._id}`}
+                          checked={selectedIds.has(row._id)}
+                          onChange={(e) =>
+                            setSelectedIds(
+                              toggleIdSelection(selectedIds, row._id, e.target.checked)
+                            )
+                          }
+                          aria-label={`Select ${row.applicationRef}`}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 font-medium text-primary">{row.applicationRef}</td>
                     <td className="px-4 py-3 font-medium">{row.fullName}</td>
                     <td className="px-4 py-3 text-[#64748B]">{row.postAppliedFor ?? "—"}</td>

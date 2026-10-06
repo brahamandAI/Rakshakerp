@@ -53,7 +53,7 @@ Health check: `http://localhost:3000/api/health`
 ## Authentication
 
 ### Staff (L1, L2, Support)
-- Login: `/staff/login`
+- Login: `/staff/login` 
 - Role-based dashboard access
 
 ### Employee Portal
@@ -78,3 +78,4 @@ OTP is printed to the server console in development when email is not configured
 
 
 
+pm2 restart employee-onboarding-portal

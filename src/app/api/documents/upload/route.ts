@@ -5,8 +5,7 @@ import {
   getEmployeeSession,
   setEmployeeSessionCookie,
 } from "@/lib/auth/employee-session";
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
 import {
   uploadEmployeeDocument,
   OnboardingError,
@@ -28,32 +27,38 @@ const EDITABLE_STATUSES = [
 async function resolveUploadEmployeeId(
   sessionEmployeeId?: string
 ): Promise<string | null> {
-  await connectDB();
-
   if (sessionEmployeeId) {
-    const current = await Employee.findById(sessionEmployeeId).select("status");
-    if (current && EDITABLE_STATUSES.includes(current.status)) {
+    const current = await prisma.employee.findUnique({
+      where: { id: sessionEmployeeId },
+      select: { status: true },
+    });
+    if (
+      current &&
+      EDITABLE_STATUSES.includes(current.status as EmployeeStatus)
+    ) {
       return sessionEmployeeId;
     }
   }
 
   const staffSession = await auth();
   if (staffSession?.user?.role === UserRole.SUBMITTER && staffSession.user.id) {
-    const draft = await Employee.findOne({
-      submittedBy: staffSession.user.id,
-      status: EmployeeStatus.DRAFT,
-    })
-      .sort({ updatedAt: -1 })
-      .select("_id applicationRef email");
+    const draft = await prisma.employee.findFirst({
+      where: {
+        submittedBy: staffSession.user.id,
+        status: EmployeeStatus.DRAFT,
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true, applicationRef: true, email: true },
+    });
 
     if (draft) {
       const token = await createEmployeeSession({
-        employeeId: draft._id.toString(),
+        employeeId: draft.id,
         applicationRef: draft.applicationRef,
         email: draft.email,
       });
       await setEmployeeSessionCookie(token);
-      return draft._id.toString();
+      return draft.id;
     }
   }
 

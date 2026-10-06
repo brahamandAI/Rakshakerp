@@ -1,11 +1,10 @@
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
 import { EmployeeStatus } from "@/types/enums";
-import { ADMIN_REGISTRATIONS_FILTER } from "@/lib/services/approval-queue";
 import {
-  getRegistrationStatusLabel,
-} from "@/features/application-status/constants";
+  asRecord,
+  isAdminRegistrationEmployee,
+} from "@/lib/services/approval-queue";
+import { getRegistrationStatusLabel } from "@/features/application-status/constants";
 import { toClientProps } from "@/lib/serialize/client-props";
 import {
   pickSearchableAdditional,
@@ -36,31 +35,92 @@ export interface SubmitterRegistrationItem {
   submittedByEmail?: string;
 }
 
-function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationItem {
-  const personal = emp.personalDetails as
-    | {
-        fullName?: string;
-        postAppliedFor?: string;
-        fatherName?: string;
-        fatherOrHusbandName?: string;
-        aadhaarNumber?: string;
-        panNumber?: string;
-      }
-    | undefined;
-  const additional = emp.additionalDetails as
-    | {
-        uanNo?: string;
-        esicNumber?: string;
-        accountNumber?: string;
-      }
-    | undefined;
-  const searchablePersonal = pickSearchablePersonal(personal);
-  const searchableAdditional = pickSearchableAdditional(additional);
-  const temporaryEmployeeId = emp.temporaryEmployeeId as string | undefined;
+type SubmitterRow = {
+  id: string;
+  applicationRef: string;
+  email: string;
+  phone: string;
+  status: string;
+  submittedAt: Date | null;
+  temporaryEmployeeId: string | null;
+  employeeId: string | null;
+  personalDetails: unknown;
+  additionalDetails: unknown;
+  forwardedToAdminAt: Date | null;
+  rejectionReason: string | null;
+  correctionNotes: string | null;
+  submittedBy: string | null;
+  submittedByName: string | null;
+  submittedByEmail: string | null;
+  l2Decision: unknown;
+  updatedAt: Date;
+};
+
+const listSelect = {
+  id: true,
+  applicationRef: true,
+  email: true,
+  phone: true,
+  status: true,
+  submittedAt: true,
+  temporaryEmployeeId: true,
+  employeeId: true,
+  personalDetails: true,
+  additionalDetails: true,
+  forwardedToAdminAt: true,
+  rejectionReason: true,
+  correctionNotes: true,
+  submittedBy: true,
+  submittedByName: true,
+  submittedByEmail: true,
+  l2Decision: true,
+  updatedAt: true,
+} as const;
+
+const ADMIN_REGISTRATION_STATUSES = [
+  EmployeeStatus.APPROVED,
+  EmployeeStatus.ID_GENERATED,
+  EmployeeStatus.SCANNING_COMPLETED,
+  EmployeeStatus.ID_CARD_ISSUED,
+] as const;
+
+async function loadSubmitterUsers(
+  rows: SubmitterRow[]
+): Promise<Map<string, { name: string; email: string }>> {
+  const ids = [
+    ...new Set(rows.map((r) => r.submittedBy).filter(Boolean) as string[]),
+  ];
+  if (ids.length === 0) return new Map();
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, email: true },
+  });
+  return new Map(users.map((u) => [u.id, { name: u.name, email: u.email }]));
+}
+
+function mapRegistration(
+  emp: SubmitterRow,
+  users: Map<string, { name: string; email: string }>
+): SubmitterRegistrationItem {
+  const personal = asRecord(emp.personalDetails) as {
+    fullName?: string;
+    postAppliedFor?: string;
+    fatherName?: string;
+    fatherOrHusbandName?: string;
+    aadhaarNumber?: string;
+    panNumber?: string;
+  } | null;
+  const additional = asRecord(emp.additionalDetails) as {
+    uanNo?: string;
+    esicNumber?: string;
+    accountNumber?: string;
+  } | null;
+  const searchablePersonal = pickSearchablePersonal(personal ?? undefined);
+  const searchableAdditional = pickSearchableAdditional(additional ?? undefined);
+  const temporaryEmployeeId = emp.temporaryEmployeeId ?? undefined;
   const status = emp.status as EmployeeStatus;
   const rejectionComment =
-    (emp.rejectionReason as string | undefined) ??
-    (emp.correctionNotes as string | undefined);
+    emp.rejectionReason ?? emp.correctionNotes ?? undefined;
 
   const statusLabel = temporaryEmployeeId
     ? `L2 Approved - Temporary Employee ID: ${temporaryEmployeeId}`
@@ -74,24 +134,22 @@ function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationIte
             ? "Temporary Employee ID Generated"
             : getRegistrationStatusLabel(status);
 
-  const submittedBy = emp.submittedBy as { name?: string; email?: string } | null | undefined;
-  const snapshotName = typeof emp.submittedByName === "string" ? emp.submittedByName : undefined;
-  const snapshotEmail = typeof emp.submittedByEmail === "string" ? emp.submittedByEmail : undefined;
+  const submitterUser = emp.submittedBy ? users.get(emp.submittedBy) : undefined;
 
   return toClientProps({
-    _id: String(emp._id),
-    applicationRef: String(emp.applicationRef),
+    _id: emp.id,
+    applicationRef: emp.applicationRef,
     fullName: personal?.fullName ?? "Unknown",
-    email: String(emp.email),
-    phone: String(emp.phone),
+    email: emp.email,
+    phone: emp.phone,
     postAppliedFor: personal?.postAppliedFor,
     status,
     statusLabel,
     submittedAt: emp.submittedAt
-      ? new Date(emp.submittedAt as Date).toISOString()
+      ? new Date(emp.submittedAt).toISOString()
       : undefined,
     temporaryEmployeeId,
-    employeeId: emp.employeeId as string | undefined,
+    employeeId: emp.employeeId ?? undefined,
     fatherName: searchablePersonal.fatherName || undefined,
     aadhaarNumber: searchablePersonal.aadhaarNumber || undefined,
     panNumber: searchablePersonal.panNumber || undefined,
@@ -99,43 +157,43 @@ function mapRegistration(emp: Record<string, unknown>): SubmitterRegistrationIte
     esicNumber: searchableAdditional.esicNumber || undefined,
     accountNumber: searchableAdditional.accountNumber || undefined,
     forwardedToAdminAt: emp.forwardedToAdminAt
-      ? new Date(emp.forwardedToAdminAt as Date).toISOString()
+      ? new Date(emp.forwardedToAdminAt).toISOString()
       : undefined,
     rejectionComment,
-    submittedByName:
-      (submittedBy && typeof submittedBy === "object" && submittedBy.name
-        ? submittedBy.name
-        : snapshotName) || undefined,
-    submittedByEmail:
-      (submittedBy && typeof submittedBy === "object" && submittedBy.email
-        ? submittedBy.email
-        : snapshotEmail) || undefined,
+    submittedByName: submitterUser?.name || emp.submittedByName || undefined,
+    submittedByEmail: submitterUser?.email || emp.submittedByEmail || undefined,
   });
+}
+
+async function mapRows(rows: SubmitterRow[]): Promise<SubmitterRegistrationItem[]> {
+  const users = await loadSubmitterUsers(rows);
+  return rows.map((r) => mapRegistration(r, users));
 }
 
 export async function getSubmitterRegistrations(
   submitterId: string
 ): Promise<SubmitterRegistrationItem[]> {
-  await connectDB();
-  const items = await Employee.find({
-    submittedBy: new mongoose.Types.ObjectId(submitterId),
-  })
-    .sort({ updatedAt: -1 })
-    .limit(100)
-    .lean();
+  const items = await prisma.employee.findMany({
+    where: { submittedBy: submitterId },
+    select: listSelect,
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+  });
 
-  return items.map(mapRegistration);
+  return mapRows(items);
 }
 
 export async function getSubmitterRegistrationDetail(
   submitterId: string,
   employeeId: string
 ) {
-  await connectDB();
-  const employee = await Employee.findOne({
-    _id: employeeId,
-    submittedBy: new mongoose.Types.ObjectId(submitterId),
-  }).lean();
+  const employee = await prisma.employee.findFirst({
+    where: {
+      id: employeeId,
+      submittedBy: submitterId,
+    },
+    select: { id: true },
+  });
 
   if (!employee) return null;
 
@@ -148,42 +206,50 @@ export async function getSubmitterRegistrationDetail(
 export async function getSubmitterReversedRegistrations(
   submitterId: string
 ): Promise<SubmitterRegistrationItem[]> {
-  await connectDB();
-  const items = await Employee.find({
-    submittedBy: new mongoose.Types.ObjectId(submitterId),
-    status: {
-      $in: [EmployeeStatus.L1_RETURNED, EmployeeStatus.L2_RETURNED],
+  const items = await prisma.employee.findMany({
+    where: {
+      submittedBy: submitterId,
+      status: {
+        in: [EmployeeStatus.L1_RETURNED, EmployeeStatus.L2_RETURNED],
+      },
     },
-  })
-    .sort({ updatedAt: -1 })
-    .limit(100)
-    .lean();
+    select: listSelect,
+    orderBy: { updatedAt: "desc" },
+    take: 100,
+  });
 
-  return items.map(mapRegistration);
+  return mapRows(items);
 }
 
 export async function getSubmitterStats(submitterId: string) {
-  await connectDB();
-  const submittedBy = new mongoose.Types.ObjectId(submitterId);
-
   const [total, pendingL1, pendingL2, approved, reversed] = await Promise.all([
-    Employee.countDocuments({ submittedBy }),
-    Employee.countDocuments({
-      submittedBy,
-      status: { $in: [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW] },
+    prisma.employee.count({ where: { submittedBy: submitterId } }),
+    prisma.employee.count({
+      where: {
+        submittedBy: submitterId,
+        status: {
+          in: [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW],
+        },
+      },
     }),
-    Employee.countDocuments({
-      submittedBy,
-      status: EmployeeStatus.L2_REVIEW,
+    prisma.employee.count({
+      where: {
+        submittedBy: submitterId,
+        status: EmployeeStatus.L2_REVIEW,
+      },
     }),
-    Employee.countDocuments({
-      submittedBy,
-      temporaryEmployeeId: { $exists: true, $ne: null },
+    prisma.employee.count({
+      where: {
+        submittedBy: submitterId,
+        temporaryEmployeeId: { not: null },
+      },
     }),
-    Employee.countDocuments({
-      submittedBy,
-      status: {
-        $in: [EmployeeStatus.L1_RETURNED, EmployeeStatus.L2_RETURNED],
+    prisma.employee.count({
+      where: {
+        submittedBy: submitterId,
+        status: {
+          in: [EmployeeStatus.L1_RETURNED, EmployeeStatus.L2_RETURNED],
+        },
       },
     }),
   ]);
@@ -194,37 +260,62 @@ export async function getSubmitterStats(submitterId: string) {
 export async function getAdminCompletedRegistrations(): Promise<
   SubmitterRegistrationItem[]
 > {
-  await connectDB();
-  const items = await Employee.find(ADMIN_REGISTRATIONS_FILTER)
-    .populate("submittedBy", "name email")
-    .sort({ forwardedToAdminAt: -1 })
-    .limit(100)
-    .lean();
+  const candidates = await prisma.employee.findMany({
+    where: {
+      forwardedToAdminAt: { not: null },
+      temporaryEmployeeId: { not: null },
+      status: { in: [...ADMIN_REGISTRATION_STATUSES] },
+    },
+    select: listSelect,
+    orderBy: { forwardedToAdminAt: "desc" },
+    take: 300,
+  });
 
-  return items.map(mapRegistration);
+  const items = candidates
+    .filter(isAdminRegistrationEmployee)
+    .slice(0, 100);
+
+  return mapRows(items);
 }
 
 export async function getAdminRegistrationStats() {
-  await connectDB();
-  const [completed, pendingL1, pendingL2] = await Promise.all([
-    Employee.countDocuments(ADMIN_REGISTRATIONS_FILTER),
-    Employee.countDocuments({
-      status: { $in: [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW] },
+  const [adminCandidates, pendingL1, pendingL2] = await Promise.all([
+    prisma.employee.findMany({
+      where: {
+        forwardedToAdminAt: { not: null },
+        temporaryEmployeeId: { not: null },
+        status: { in: [...ADMIN_REGISTRATION_STATUSES] },
+      },
+      select: {
+        status: true,
+        forwardedToAdminAt: true,
+        temporaryEmployeeId: true,
+        l2Decision: true,
+      },
     }),
-    Employee.countDocuments({ status: EmployeeStatus.L2_REVIEW }),
+    prisma.employee.count({
+      where: {
+        status: {
+          in: [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW],
+        },
+      },
+    }),
+    prisma.employee.count({ where: { status: EmployeeStatus.L2_REVIEW } }),
   ]);
+
+  const completed = adminCandidates.filter(isAdminRegistrationEmployee).length;
   return { completed, pendingL1, pendingL2 };
 }
 
 export async function getAdminQueueRegistrations(
   statuses: EmployeeStatus[]
 ): Promise<SubmitterRegistrationItem[]> {
-  await connectDB();
-  const items = await Employee.find({ status: { $in: statuses } })
-    .populate("submittedBy", "name email")
-    .sort({ submittedAt: -1, updatedAt: -1 })
-    .limit(200)
-    .lean();
+  const items = await prisma.employee.findMany({
+    where: { status: { in: statuses } },
+    select: listSelect,
+    orderBy: [{ submittedAt: "desc" }, { updatedAt: "desc" }],
+    take: 200,
+  });
 
-  return items.map(mapRegistration);
+  return mapRows(items);
 }

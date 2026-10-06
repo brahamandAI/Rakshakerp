@@ -38,7 +38,7 @@ const KEY_POINTS = [
 
 export function HomeApplicationOverview() {
   return (
-    <section id="how-it-works" className="relative scroll-mt-24 bg-[#F4F7FB] py-16 lg:py-24">
+    <section id="how-it-works" className="relative scroll-mt-24 bg-[#F4F9FC] py-16 lg:py-24">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-white to-transparent" />
       <div className="relative mx-auto max-w-7xl px-4 lg:px-8">
         <div className="text-center">

@@ -10,6 +10,7 @@ const MANAGEABLE = new Set([
   UserRole.SUBMITTER,
   UserRole.L1,
   UserRole.L2,
+  UserRole.SCANNING,
   UserRole.ADMIN,
 ]);
 
@@ -27,9 +28,10 @@ export default async function AdminUsersPage() {
         | UserRole.SUBMITTER
         | UserRole.L1
         | UserRole.L2
+        | UserRole.SCANNING
         | UserRole.ADMIN,
-      department: u.department,
-      phone: u.phone,
+      department: u.department ?? undefined,
+      phone: u.phone ?? undefined,
       isActive: u.isActive,
       lastLoginAt: u.lastLoginAt?.toISOString(),
       createdAt: u.createdAt.toISOString(),
@@ -39,7 +41,7 @@ export default async function AdminUsersPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="User Management"
-        description="Create and manage Submitter, L1, L2, and Super Admin accounts."
+        description="Create and manage Submitter, L1, L2, Scanning, and Super Admin accounts."
       />
       <UsersManager users={users} currentUserId={user.id} />
     </div>

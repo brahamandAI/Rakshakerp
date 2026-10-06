@@ -2,15 +2,13 @@
 
 import { requireStaffAuth } from "@/lib/auth/guards";
 import { UserRole, EmployeeStatus } from "@/types/enums";
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
 import {
   createEmployeeSession,
   setEmployeeSessionCookie,
   clearEmployeeSessionCookie,
 } from "@/lib/auth/employee-session";
 import { redirect } from "next/navigation";
-import mongoose from "mongoose";
 
 const EDITABLE = [
   EmployeeStatus.DRAFT,
@@ -30,18 +28,19 @@ export async function openSubmitterRegistrationAction(
   employeeId: string
 ): Promise<{ success: true; redirectTo: string } | { success: false; error: string }> {
   const { user } = await requireStaffAuth(UserRole.SUBMITTER);
-  await connectDB();
 
-  const employee = await Employee.findOne({
-    _id: employeeId,
-    submittedBy: new mongoose.Types.ObjectId(user.id),
+  const employee = await prisma.employee.findFirst({
+    where: {
+      id: employeeId,
+      submittedBy: user.id,
+    },
   });
 
   if (!employee) {
     return { success: false, error: "Registration not found" };
   }
 
-  if (!EDITABLE.includes(employee.status)) {
+  if (!EDITABLE.includes(employee.status as EmployeeStatus)) {
     return {
       success: false,
       error: "This registration is locked and cannot be edited",
@@ -49,7 +48,7 @@ export async function openSubmitterRegistrationAction(
   }
 
   const token = await createEmployeeSession({
-    employeeId: employee._id.toString(),
+    employeeId: employee.id,
     applicationRef: employee.applicationRef,
     email: employee.email,
   });

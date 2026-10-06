@@ -20,6 +20,7 @@ import {
   Headphones,
   Crown,
   Undo2,
+  ScanLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StaffRole, UserRole } from "@/types/enums";
@@ -108,6 +109,18 @@ const NAV_ITEMS: Record<StaffRole, NavItem[] | NavSection[]> = {
     { label: "Documents", href: "/dashboard/l2/documents", icon: FolderOpen },
     { label: "Notifications", href: "/dashboard/l2/notifications", icon: Bell },
   ],
+  [UserRole.SCANNING]: [
+    { label: "Dashboard", href: "/dashboard/scanning", icon: LayoutDashboard },
+    { label: "Pending", href: "/dashboard/scanning/applications/pending", icon: Clock },
+    {
+      label: "Approved / Scanning Completed",
+      href: "/dashboard/scanning/applications/completed",
+      icon: CheckCircle2,
+    },
+    { label: "All", href: "/dashboard/scanning/applications/all", icon: FileOutput },
+    { label: "Documents", href: "/dashboard/scanning/documents", icon: FolderOpen },
+    { label: "Notifications", href: "/dashboard/scanning/notifications", icon: Bell },
+  ],
   [UserRole.SUPPORT]: SUPPORT_NAV,
   [UserRole.ADMIN]: ADMIN_NAV,
 };
@@ -129,6 +142,11 @@ const ROLE_BADGE: Record<StaffRole, { icon: LucideIcon; className: string }> = {
     icon: ShieldCheck,
     className:
       "border-amber-400/35 bg-gradient-to-r from-amber-500/30 to-[#D4AF37]/20 text-amber-100",
+  },
+  [UserRole.SCANNING]: {
+    icon: ScanLine,
+    className:
+      "border-cyan-400/30 bg-gradient-to-r from-cyan-500/25 to-sky-600/20 text-cyan-100",
   },
   [UserRole.SUPPORT]: {
     icon: Headphones,
@@ -153,6 +171,7 @@ function isNavActive(pathname: string, href: string, role: StaffRole): boolean {
     [UserRole.SUBMITTER]: "/dashboard/submitter",
     [UserRole.L1]: "/dashboard/l1",
     [UserRole.L2]: "/dashboard/l2",
+    [UserRole.SCANNING]: "/dashboard/scanning",
     [UserRole.SUPPORT]: "/dashboard/support",
     [UserRole.ADMIN]: "/dashboard/admin",
   };
@@ -183,9 +202,11 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
         ? "/dashboard/l1"
         : role === UserRole.L2
           ? "/dashboard/l2"
-          : role === UserRole.ADMIN
-            ? "/dashboard/admin"
-            : "/dashboard/support";
+          : role === UserRole.SCANNING
+            ? "/dashboard/scanning"
+            : role === UserRole.ADMIN
+              ? "/dashboard/admin"
+              : "/dashboard/support";
 
   const roleBadge = ROLE_BADGE[role];
   const RoleIcon = roleBadge.icon;
@@ -250,8 +271,8 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
             href={dashboardHome}
             onClick={handleNavClick}
             className={cn(
-              "relative z-10 flex items-center overflow-hidden rounded-xl bg-black",
-              desktopCollapsed ? "justify-center px-1 py-2" : "px-2 py-2"
+              "relative z-10 flex items-center overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-white/20",
+              desktopCollapsed ? "justify-center px-1.5 py-2" : "px-2.5 py-2.5"
             )}
             aria-label="Rakshak Enrollment Portal home"
             title="Rakshak Enrollment Portal"
@@ -260,7 +281,7 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
               href={null}
               variant="sidebar"
               priority
-              className={desktopCollapsed ? "max-w-[56px]" : "w-full max-w-[252px]"}
+              className={desktopCollapsed ? "max-w-[52px]" : "w-full max-w-[248px]"}
             />
           </Link>
 

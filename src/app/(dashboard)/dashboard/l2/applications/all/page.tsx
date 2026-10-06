@@ -28,6 +28,7 @@ export default async function L2AllRegistrationsPage() {
         showEmployeeId
         viewPathPrefix="/dashboard/l2/applications"
         emptyMessage="No fully approved registrations yet."
+        exportScope="l2"
       />
     </div>
   );

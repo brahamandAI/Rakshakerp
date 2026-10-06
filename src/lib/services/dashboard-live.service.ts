@@ -1,8 +1,6 @@
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
 import { EmployeeStatus, StaffRole, UserRole } from "@/types/enums";
 import { getStaffUnreadCount } from "@/lib/services/notification.service";
-import mongoose from "mongoose";
 
 export interface DashboardLiveSnapshot {
   fingerprint: string;
@@ -20,22 +18,21 @@ export async function getDashboardLiveSnapshot(
   role: StaffRole,
   userId: string
 ): Promise<DashboardLiveSnapshot> {
-  await connectDB();
-
-  const activityFilter =
+  const activityWhere =
     role === UserRole.SUBMITTER
       ? {
-          submittedBy: new mongoose.Types.ObjectId(userId),
-          status: { $ne: EmployeeStatus.DRAFT },
+          submittedBy: userId,
+          status: { not: EmployeeStatus.DRAFT },
         }
-      : { status: { $ne: EmployeeStatus.DRAFT } };
+      : { status: { not: EmployeeStatus.DRAFT } };
 
   const [unreadCount, latest] = await Promise.all([
     getStaffUnreadCount(userId),
-    Employee.findOne(activityFilter)
-      .sort({ updatedAt: -1 })
-      .select("updatedAt")
-      .lean(),
+    prisma.employee.findFirst({
+      where: activityWhere,
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    }),
   ]);
 
   const latestActivity = latest?.updatedAt

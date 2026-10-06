@@ -137,7 +137,7 @@ export function DashboardFrame(props: DashboardFrameProps) {
     <DashboardChromeProvider>
       <div className="dashboard-shell-bg flex h-dvh overflow-hidden">
         <DashboardSidebar role={user.role} unreadCountPromise={unreadCountPromise} />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-[#E2E8F0]/70 bg-[#F7F9FC]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#F7F9FC]">
           <DashboardHeader
             user={user}
             unreadCountPromise={unreadCountPromise}
@@ -145,8 +145,8 @@ export function DashboardFrame(props: DashboardFrameProps) {
             profileHref={profileHref}
             {...headerProps}
           />
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-4 sm:p-6">
-            <div className="mx-auto w-full min-w-0 max-w-7xl animate-fade-in">{children}</div>
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3 sm:p-5 lg:p-6">
+            <div className="w-full min-w-0 max-w-none animate-fade-in">{children}</div>
           </main>
         </div>
       </div>

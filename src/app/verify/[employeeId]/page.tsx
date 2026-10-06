@@ -1,8 +1,7 @@
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
-import { IdCard } from "@/lib/db/models/IdCard";
+import { prisma } from "@/lib/db/prisma";
 import { CheckCircle, XCircle, BadgeCheck } from "lucide-react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { asRecord } from "@/lib/services/approval-queue";
 
 export const metadata = { title: "Verify Employee — Rakshak Securitas" };
 
@@ -12,15 +11,31 @@ interface PageProps {
 
 export default async function VerifyEmployeePage({ params }: PageProps) {
   const { employeeId: employeeIdCode } = await params;
-  await connectDB();
 
-  const employee = await Employee.findOne({ employeeId: employeeIdCode }).lean();
+  const employee = await prisma.employee.findFirst({
+    where: { employeeId: employeeIdCode },
+    select: {
+      id: true,
+      employeeId: true,
+      applicationRef: true,
+      status: true,
+      personalDetails: true,
+    },
+  });
+
   const idCard = employee
-    ? await IdCard.findOne({ employeeId: employee._id, status: "ACTIVE" }).lean()
+    ? await prisma.idCard.findFirst({
+        where: { employeeId: employee.id, status: "ACTIVE" },
+        select: { generatedAt: true },
+      })
     : null;
 
-  const personal = employee?.personalDetails as { fullName?: string; postAppliedFor?: string } | undefined;
-  const isValid = !!employee && employee.status === "ID_CARD_ISSUED" && !!idCard;
+  const personal = asRecord(employee?.personalDetails) as {
+    fullName?: string;
+    postAppliedFor?: string;
+  } | null;
+  const isValid =
+    !!employee && employee.status === "ID_CARD_ISSUED" && !!idCard;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] p-6">
@@ -42,7 +57,10 @@ export default async function VerifyEmployeePage({ params }: PageProps) {
               <VerifyField label="Employee ID" value={employee!.employeeId!} />
               <VerifyField label="Name" value={personal?.fullName ?? "—"} />
               <VerifyField label="Post" value={personal?.postAppliedFor ?? "—"} />
-              <VerifyField label="Application Ref" value={employee!.applicationRef} />
+              <VerifyField
+                label="Application Ref"
+                value={employee!.applicationRef}
+              />
               {idCard?.generatedAt && (
                 <VerifyField
                   label="ID Card Issued"

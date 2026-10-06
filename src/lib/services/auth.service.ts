@@ -1,7 +1,4 @@
-import { connectDB } from "@/lib/db/connect";
-import { User } from "@/lib/db/models/User";
-import { Employee } from "@/lib/db/models/Employee";
-import { OtpToken } from "@/lib/db/models/OtpToken";
+import { prisma } from "@/lib/db/prisma";
 import { hashPassword, hashToken, verifyToken } from "@/lib/auth/password";
 import {
   createEmployeeSession,
@@ -19,18 +16,24 @@ const MAX_OTP_ATTEMPTS = 5;
 
 export { AuthError };
 
+/** 24-char hex id compatible with legacy ObjectId string format */
+function newObjectIdString(): string {
+  return crypto.randomBytes(12).toString("hex");
+}
+
 export async function authenticateEmployeePortal(
   applicationRef: string,
   email: string
 ): Promise<{ otpSent: boolean; maskedEmail: string }> {
-  await connectDB();
-
   const normalizedEmail = email.toLowerCase().trim();
   const normalizedRef = applicationRef.trim().toUpperCase();
 
-  const employee = await Employee.findOne({
-    applicationRef: normalizedRef,
-    email: normalizedEmail,
+  const employee = await prisma.employee.findFirst({
+    where: {
+      applicationRef: normalizedRef,
+      email: normalizedEmail,
+    },
+    select: { id: true },
   });
 
   if (!employee) {
@@ -43,18 +46,23 @@ export async function authenticateEmployeePortal(
   const otp = generateOtp();
   const hashedOtp = await hashToken(otp);
 
-  await OtpToken.deleteMany({
-    applicationRef: normalizedRef,
-    email: normalizedEmail,
+  await prisma.otpToken.deleteMany({
+    where: {
+      applicationRef: normalizedRef,
+      email: normalizedEmail,
+    },
   });
 
-  await OtpToken.create({
-    applicationRef: normalizedRef,
-    email: normalizedEmail,
-    hashedOtp,
-    purpose: "FORM_ACCESS",
-    expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
-    attempts: 0,
+  await prisma.otpToken.create({
+    data: {
+      id: newObjectIdString(),
+      applicationRef: normalizedRef,
+      email: normalizedEmail,
+      hashedOtp,
+      purpose: "FORM_ACCESS",
+      expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
+      attempts: 0,
+    },
   });
 
   // Log OTP in development; integrate email provider in production
@@ -75,17 +83,19 @@ export async function verifyEmployeeOtp(
   email: string,
   otp: string
 ): Promise<{ redirectTo: string }> {
-  await connectDB();
-
   const normalizedEmail = email.toLowerCase().trim();
   const normalizedRef = applicationRef.trim().toUpperCase();
+  const now = new Date();
 
-  const otpRecord = await OtpToken.findOne({
-    applicationRef: normalizedRef,
-    email: normalizedEmail,
-    usedAt: { $exists: false },
-    expiresAt: { $gt: new Date() },
-  }).sort({ createdAt: -1 });
+  const otpRecord = await prisma.otpToken.findFirst({
+    where: {
+      applicationRef: normalizedRef,
+      email: normalizedEmail,
+      usedAt: null,
+      expiresAt: { gt: now },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   if (!otpRecord) {
     throw new AuthError("OTP expired or not found", "OTP_EXPIRED");
@@ -98,17 +108,29 @@ export async function verifyEmployeeOtp(
   const isValid = await verifyToken(otp, otpRecord.hashedOtp);
 
   if (!isValid) {
-    otpRecord.attempts += 1;
-    await otpRecord.save();
+    await prisma.otpToken.update({
+      where: { id: otpRecord.id },
+      data: { attempts: otpRecord.attempts + 1 },
+    });
     throw new AuthError("Invalid OTP", "OTP_INVALID");
   }
 
-  otpRecord.usedAt = new Date();
-  await otpRecord.save();
+  await prisma.otpToken.update({
+    where: { id: otpRecord.id },
+    data: { usedAt: new Date() },
+  });
 
-  const employee = await Employee.findOne({
-    applicationRef: normalizedRef,
-    email: normalizedEmail,
+  const employee = await prisma.employee.findFirst({
+    where: {
+      applicationRef: normalizedRef,
+      email: normalizedEmail,
+    },
+    select: {
+      id: true,
+      applicationRef: true,
+      email: true,
+      status: true,
+    },
   });
 
   if (!employee) {
@@ -116,14 +138,14 @@ export async function verifyEmployeeOtp(
   }
 
   const token = await createEmployeeSession({
-    employeeId: employee._id.toString(),
+    employeeId: employee.id,
     applicationRef: employee.applicationRef,
     email: employee.email,
   });
 
   await setEmployeeSessionCookie(token);
 
-  const editableStatuses = [
+  const editableStatuses: string[] = [
     EmployeeStatus.DRAFT,
     EmployeeStatus.L1_RETURNED,
     EmployeeStatus.L2_RETURNED,
@@ -137,27 +159,28 @@ export async function verifyEmployeeOtp(
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
-  await connectDB();
-
   const normalizedEmail = email.toLowerCase().trim();
-  const user = await User.findOne({ email: normalizedEmail, isActive: true });
+  const user = await prisma.user.findFirst({
+    where: { email: normalizedEmail, isActive: true },
+  });
 
   // Always succeed silently to prevent email enumeration
   if (!user) return;
 
-  const resetToken = await createPasswordResetToken(
-    user._id.toString(),
-    user.email
-  );
+  const resetToken = await createPasswordResetToken(user.id, user.email);
 
   const hashedToken = crypto
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
 
-  user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
-  await user.save();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
 
   const resetUrl = `${getBaseUrl()}/staff/reset-password?token=${resetToken}`;
 
@@ -170,21 +193,22 @@ export async function resetPassword(
   token: string,
   newPassword: string
 ): Promise<void> {
-  await connectDB();
-
   const payload = await verifyPasswordResetToken(token);
   if (!payload) {
     throw new AuthError("Invalid or expired reset link", "TOKEN_INVALID");
   }
 
   const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  const now = new Date();
 
-  const user = await User.findOne({
-    _id: payload.userId,
-    email: payload.email,
-    resetPasswordToken: hashedToken,
-    resetPasswordExpires: { $gt: new Date() },
-    isActive: true,
+  const user = await prisma.user.findFirst({
+    where: {
+      id: payload.userId,
+      email: payload.email,
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { gt: now },
+      isActive: true,
+    },
   });
 
   if (!user) {
@@ -198,13 +222,17 @@ export async function resetPassword(
     );
   }
 
-  user.passwordHash = await hashPassword(newPassword);
-  user.passwordChangedAt = new Date();
-  user.resetPasswordToken = undefined;
-  user.resetPasswordExpires = undefined;
-  user.failedLoginAttempts = 0;
-  user.lockedUntil = undefined;
-  await user.save();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      passwordChangedAt: new Date(),
+      resetPasswordToken: null,
+      resetPasswordExpires: null,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    },
+  });
 }
 
 export async function logoutEmployee(): Promise<void> {

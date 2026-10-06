@@ -22,6 +22,7 @@ export default async function L1RejectedApplicationsPage() {
       <ApplicationTable
         applications={applications}
         emptyMessage="No reversed applications."
+        exportScope="l1"
       />
     </div>
   );

@@ -12,6 +12,13 @@ import {
   getRegistrationSearchValue,
   matchesRegistrationSearch,
 } from "@/lib/ui/registration-search";
+import {
+  ListExportToolbar,
+  toggleIdSelection,
+  useSyncedSelection,
+} from "@/features/export/components/ListExportToolbar";
+import type { ExportButtonScope } from "@/features/export/components/DownloadExcelButton";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ApplicationTableProps {
   applications: ApplicationListItem[];
@@ -20,6 +27,7 @@ interface ApplicationTableProps {
   showEmployeeId?: boolean;
   showL2ReverseNote?: boolean;
   viewPathPrefix?: string;
+  exportScope?: ExportButtonScope;
 }
 
 const L1_EDITABLE = new Set<EmployeeStatus>([
@@ -48,6 +56,7 @@ export function ApplicationTable({
   showEmployeeId = false,
   showL2ReverseNote = false,
   viewPathPrefix = "/dashboard/l1/applications",
+  exportScope,
 }: ApplicationTableProps) {
   const list = useFilteredList(
     applications,
@@ -56,10 +65,13 @@ export function ApplicationTable({
     (app) => app.submittedAt ?? app.l1ApprovedAt,
     (app) => app.fullName,
     "all",
-    (app, field, query) => matchesRegistrationSearch(app, field, query)
+    (app, field, query) => matchesRegistrationSearch(app, field, query),
+    (app) => app._id
   );
+  const { selectedIds, setSelectedIds } = useSyncedSelection(list.filteredIds);
 
   const isL1Table = viewPathPrefix.startsWith("/dashboard/l1");
+  const enableExport = Boolean(exportScope);
 
   if (applications.length === 0) {
     return <EmptyState title={emptyMessage} description={emptyDescription} />;
@@ -101,6 +113,10 @@ export function ApplicationTable({
     );
   }
 
+  function employeeIdLabel(app: ApplicationListItem) {
+    return app.temporaryEmployeeId || app.employeeId || "—";
+  }
+
   return (
     <div className="overflow-hidden rounded-2xl border border-[#E2E8F0] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <DataListToolbar
@@ -116,13 +132,29 @@ export function ApplicationTable({
         page={list.page}
         pageCount={list.pageCount}
         onPageChange={list.setPage}
+        showDateFilter={enableExport}
+        dateFrom={list.dateFrom}
+        dateTo={list.dateTo}
+        onDateFromChange={list.setDateFrom}
+        onDateToChange={list.setDateTo}
       />
+
+      {enableExport && exportScope && (
+        <ListExportToolbar
+          scope={exportScope}
+          filteredIds={list.filteredIds}
+          dateFrom={list.dateFrom}
+          dateTo={list.dateTo}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
+        />
+      )}
 
       {list.total === 0 ? (
         <div className="p-4">
           <EmptyState
             title="No matching registrations"
-            description="Try a different search or approval status."
+            description="Try a different search, date range, or approval status."
           />
         </div>
       ) : (
@@ -131,6 +163,11 @@ export function ApplicationTable({
             <table className="w-full min-w-[880px] text-sm">
               <thead className="sticky top-0 z-[1]">
                 <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]">
+                  {enableExport && (
+                    <th className="w-10 px-3 py-3 text-left">
+                      <span className="sr-only">Select</span>
+                    </th>
+                  )}
                   <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
                     Application Ref
                   </th>
@@ -165,6 +202,20 @@ export function ApplicationTable({
                     key={app._id}
                     className="border-b border-[#E2E8F0] last:border-0 transition-colors hover:bg-[#F8FAFC]"
                   >
+                    {enableExport && (
+                      <td className="px-3 py-3.5 align-middle">
+                        <Checkbox
+                          id={`select-${app._id}`}
+                          checked={selectedIds.has(app._id)}
+                          onChange={(e) =>
+                            setSelectedIds(
+                              toggleIdSelection(selectedIds, app._id, e.target.checked)
+                            )
+                          }
+                          aria-label={`Select ${app.applicationRef}`}
+                        />
+                      </td>
+                    )}
                     <td className="whitespace-nowrap px-4 py-3.5 align-middle font-medium text-primary">
                       {app.applicationRef}
                     </td>
@@ -215,7 +266,7 @@ export function ApplicationTable({
                     )}
                     {showEmployeeId && (
                       <td className="whitespace-nowrap px-4 py-3.5 align-middle font-mono text-sm">
-                        {app.employeeId ?? "—"}
+                        {employeeIdLabel(app)}
                       </td>
                     )}
                     <td className="whitespace-nowrap px-4 py-3.5 align-middle text-[#64748B]">
@@ -238,6 +289,20 @@ export function ApplicationTable({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
+                    {enableExport && (
+                      <div className="mb-2">
+                        <Checkbox
+                          id={`select-m-${app._id}`}
+                          label="Select for download"
+                          checked={selectedIds.has(app._id)}
+                          onChange={(e) =>
+                            setSelectedIds(
+                              toggleIdSelection(selectedIds, app._id, e.target.checked)
+                            )
+                          }
+                        />
+                      </div>
+                    )}
                     <p className="font-heading font-semibold text-primary">{app.fullName}</p>
                     <p className="mt-0.5 text-xs font-medium text-[#64748B]">
                       {app.applicationRef}
@@ -260,7 +325,7 @@ export function ApplicationTable({
                     <div className="col-span-2">
                       <dt className="uppercase tracking-wide">Employee ID</dt>
                       <dd className="mt-0.5 font-mono text-sm text-[#0F172A]">
-                        {app.employeeId ?? "—"}
+                        {employeeIdLabel(app)}
                       </dd>
                     </div>
                   )}

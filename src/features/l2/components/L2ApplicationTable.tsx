@@ -21,11 +21,18 @@ import {
   getRegistrationSearchValue,
   matchesRegistrationSearch,
 } from "@/lib/ui/registration-search";
+import {
+  ListExportToolbar,
+  toggleIdSelection,
+  useSyncedSelection,
+} from "@/features/export/components/ListExportToolbar";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface L2ApplicationTableProps {
   applications: ApplicationListItem[];
   emptyMessage?: string;
   viewPathPrefix?: string;
+  exportScope?: "l2";
 }
 
 function formatDate(iso?: string) {
@@ -41,6 +48,7 @@ export function L2ApplicationTable({
   applications,
   emptyMessage = "No applications found.",
   viewPathPrefix = "/dashboard/l2/applications",
+  exportScope = "l2",
 }: L2ApplicationTableProps) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -56,8 +64,10 @@ export function L2ApplicationTable({
     (app) => app.l1ApprovedAt ?? app.submittedAt,
     (app) => app.fullName,
     "all",
-    (app, field, query) => matchesRegistrationSearch(app, field, query)
+    (app, field, query) => matchesRegistrationSearch(app, field, query),
+    (app) => app._id
   );
+  const { selectedIds, setSelectedIds } = useSyncedSelection(list.filteredIds);
 
   async function handleApprove(employeeId: string) {
     if (busyId || doneIds.has(employeeId)) return;
@@ -157,11 +167,27 @@ export function L2ApplicationTable({
           page={list.page}
           pageCount={list.pageCount}
           onPageChange={list.setPage}
+          showDateFilter
+          dateFrom={list.dateFrom}
+          dateTo={list.dateTo}
+          onDateFromChange={list.setDateFrom}
+          onDateToChange={list.setDateTo}
+        />
+        <ListExportToolbar
+          scope={exportScope}
+          filteredIds={list.filteredIds}
+          dateFrom={list.dateFrom}
+          dateTo={list.dateTo}
+          selectedIds={selectedIds}
+          onSelectedIdsChange={setSelectedIds}
         />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[#E2E8F0] bg-[#F8FAFC]/90">
+                <th className="w-10 px-3 py-3 text-left">
+                  <span className="sr-only">Select</span>
+                </th>
                 <th className="whitespace-nowrap px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-[#64748B]">
                   Application Ref
                 </th>
@@ -189,6 +215,18 @@ export function L2ApplicationTable({
                     key={app._id}
                     className="border-b border-[#E2E8F0] last:border-0 hover:bg-[#F8FAFC]"
                   >
+                    <td className="px-3 py-3 align-middle">
+                      <Checkbox
+                        id={`l2-select-${app._id}`}
+                        checked={selectedIds.has(app._id)}
+                        onChange={(e) =>
+                          setSelectedIds(
+                            toggleIdSelection(selectedIds, app._id, e.target.checked)
+                          )
+                        }
+                        aria-label={`Select ${app.applicationRef}`}
+                      />
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3 align-middle font-medium text-primary">
                       {app.applicationRef}
                     </td>

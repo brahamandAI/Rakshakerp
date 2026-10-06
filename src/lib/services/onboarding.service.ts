@@ -1,7 +1,6 @@
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
-import mongoose from "mongoose";
+import { prisma } from "@/lib/db/prisma";
+import { newObjectIdString } from "@/lib/db/ids";
+import { Prisma } from "@/generated/prisma/client";
 import {
   uploadDocumentToCloudinary,
   deleteDocumentFromCloudinary,
@@ -35,7 +34,69 @@ export class OnboardingError extends Error {
   }
 }
 
-/** Convert Mongoose Mixed / subdocs to plain JSON-safe objects (prevents RSC serialize stack overflow). */
+type JsonObject = Record<string, unknown>;
+
+function asInputJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
+/** Employee row shape used while applying step mutations before Prisma update. */
+type EmployeeRow = {
+  id: string;
+  applicationRef: string;
+  status: string;
+  email: string;
+  phone: string;
+  currentStep: number;
+  completedSteps: unknown;
+  personalDetails: unknown;
+  address: unknown;
+  education: unknown;
+  references: unknown;
+  familyDetails: unknown;
+  nominee: unknown;
+  exServiceman: unknown;
+  gunman: unknown;
+  additionalDetails: unknown;
+  declaration: unknown;
+  correctionNotes: string | null;
+  correctionSteps: unknown;
+  rejectionReason: string | null;
+  submittedSnapshot: unknown;
+  pendingFieldChanges: unknown;
+  submittedBy: string | null;
+  submittedByName: string | null;
+  submittedByEmail: string | null;
+  submittedAt: Date | null;
+  lastSavedAt: Date | null;
+  l1Decision: unknown;
+  l2Decision: unknown;
+};
+
+type DocumentRow = {
+  id: string;
+  documentType: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: Date;
+};
+
+function asJsonObject(value: unknown): JsonObject {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as JsonObject;
+  }
+  return {};
+}
+
+function completedStepsOf(value: unknown): number[] {
+  return Array.isArray(value)
+    ? value.filter((s): s is number => typeof s === "number")
+    : [];
+}
+
+/** Convert nested values to plain JSON-safe objects (prevents RSC serialize stack overflow). */
 function toPlain<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
   try {
@@ -155,11 +216,21 @@ function normalizePersonal(raw: unknown): EmployeeFormData["personalDetails"] {
   };
 }
 
-function mapEmployeeToFormData(employee: InstanceType<typeof Employee>): EmployeeFormData {
-  const gunman = toPlain<EmployeeFormData["gunman"]>(
-    (employee as { gunman?: unknown }).gunman,
-    { isGunman: false }
-  );
+function mapEmployeeToFormData(employee: {
+  personalDetails: unknown;
+  address: unknown;
+  education: unknown;
+  references: unknown;
+  familyDetails: unknown;
+  nominee: unknown;
+  exServiceman: unknown;
+  gunman: unknown;
+  additionalDetails: unknown;
+  declaration: unknown;
+}): EmployeeFormData {
+  const gunman = toPlain<EmployeeFormData["gunman"]>(employee.gunman, {
+    isGunman: false,
+  });
   const additional = toPlain<EmployeeFormData["additionalDetails"]>(
     employee.additionalDetails,
     {}
@@ -175,14 +246,20 @@ function mapEmployeeToFormData(employee: InstanceType<typeof Employee>): Employe
     }
   }
 
-  const declaration = toPlain<EmployeeFormData["declaration"]>(employee.declaration, {});
+  const declaration = toPlain<EmployeeFormData["declaration"]>(
+    employee.declaration,
+    {}
+  );
 
   return {
     personalDetails: personal,
     address: normalizeAddress(employee.address),
     education: normalizeEducation(employee.education),
     references: toPlain<EmployeeFormData["references"]>(employee.references, []),
-    familyDetails: toPlain<EmployeeFormData["familyDetails"]>(employee.familyDetails, []),
+    familyDetails: toPlain<EmployeeFormData["familyDetails"]>(
+      employee.familyDetails,
+      []
+    ),
     nominee: toPlain<EmployeeFormData["nominee"]>(employee.nominee, {}),
     exServiceman: toPlain<EmployeeFormData["exServiceman"]>(employee.exServiceman, {
       isExServiceman: false,
@@ -228,14 +305,15 @@ function getDefaultFormData(fullName?: string): EmployeeFormData {
 export async function getOnboardingEmployee(
   employeeId: string
 ): Promise<OnboardingEmployee | null> {
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) return null;
 
-  const documents = await EmployeeDocument.find({
-    employeeId: employee._id,
-    isActive: true,
-  }).sort({ createdAt: -1 });
+  const documents = await prisma.employeeDocument.findMany({
+    where: { employeeId: employee.id, isActive: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   const formData = mapEmployeeToFormData(employee);
   if (!formData.personalDetails.fullName) {
@@ -243,23 +321,24 @@ export async function getOnboardingEmployee(
     formData.personalDetails.fullName = legacy.fullName ?? "";
   }
 
-  const pendingFieldChanges = toPlain<
-    OnboardingEmployee["pendingFieldChanges"]
-  >(employee.pendingFieldChanges, []);
+  const pendingFieldChanges = toPlain<OnboardingEmployee["pendingFieldChanges"]>(
+    employee.pendingFieldChanges,
+    []
+  );
+
+  const completedSteps = completedStepsOf(employee.completedSteps);
 
   return toClientProps({
-    _id: employee._id.toString(),
+    _id: employee.id,
     applicationRef: employee.applicationRef,
-    status: employee.status,
+    status: employee.status as EmployeeStatus,
     email: employee.email,
     phone: employee.phone,
     currentStep: Math.min(employee.currentStep || 1, ONBOARDING_TOTAL_STEPS),
-    completedSteps: Array.isArray(employee.completedSteps)
-      ? employee.completedSteps.filter((s) => s <= ONBOARDING_TOTAL_STEPS)
-      : [],
+    completedSteps: completedSteps.filter((s) => s <= ONBOARDING_TOTAL_STEPS),
     correctionNotes: employee.correctionNotes ?? undefined,
     correctionSteps: Array.isArray(employee.correctionSteps)
-      ? [...employee.correctionSteps]
+      ? [...(employee.correctionSteps as number[])]
       : undefined,
     pendingFieldChanges,
     formData,
@@ -268,10 +347,10 @@ export async function getOnboardingEmployee(
   });
 }
 
-function mapDocumentRecord(doc: InstanceType<typeof EmployeeDocument>): DocumentRecord {
+function mapDocumentRecord(doc: DocumentRow): DocumentRecord {
   return {
-    _id: doc._id.toString(),
-    documentType: doc.documentType,
+    _id: doc.id,
+    documentType: doc.documentType as DocumentType,
     fileName: doc.fileName,
     mimeType: doc.mimeType,
     sizeBytes: doc.sizeBytes,
@@ -316,7 +395,7 @@ export function mapStep1DataToEmployeeFields(data: Record<string, unknown>) {
 }
 
 function applyStepData(
-  employee: InstanceType<typeof Employee>,
+  employee: EmployeeRow,
   step: number,
   data: Record<string, unknown>
 ) {
@@ -327,7 +406,7 @@ function applyStepData(
       employee.address = fields.address;
       employee.education = fields.education;
       employee.additionalDetails = {
-        ...(employee.additionalDetails as Record<string, unknown>),
+        ...asJsonObject(employee.additionalDetails),
         ...fields.additionalDetails,
       };
       break;
@@ -339,16 +418,15 @@ function applyStepData(
       employee.familyDetails = (data.familyDetails as Record<string, unknown>[]) ?? [];
       break;
     case 4:
-      employee.nominee = data.nominee as typeof employee.nominee;
+      employee.nominee = data.nominee as JsonObject;
       break;
     case 5: {
-      employee.exServiceman = data.exServiceman as typeof employee.exServiceman;
-      (employee as { gunman?: Record<string, unknown> }).gunman =
-        data.gunman as Record<string, unknown>;
+      employee.exServiceman = data.exServiceman as JsonObject;
+      employee.gunman = data.gunman as JsonObject;
       if (data.additionalDetails) {
         employee.additionalDetails = {
-          ...(employee.additionalDetails as Record<string, unknown>),
-          ...(data.additionalDetails as Record<string, unknown>),
+          ...asJsonObject(employee.additionalDetails),
+          ...(data.additionalDetails as JsonObject),
         };
       }
       break;
@@ -386,9 +464,9 @@ function getStepDataForValidation(formData: EmployeeFormData, step: number): unk
           esicNumber: formData.additionalDetails.esicNumber,
           esiApplicable: formData.additionalDetails.esiApplicable,
           pfApplicable: formData.additionalDetails.pfApplicable,
-          pfNumber: formData.additionalDetails.pfNumber,
           ptApplicable: formData.additionalDetails.ptApplicable,
           bankName: formData.additionalDetails.bankName,
+          bankCode: formData.additionalDetails.bankCode,
           bankBranchName: formData.additionalDetails.bankBranchName,
           accountHolderName: formData.additionalDetails.accountHolderName,
           accountNumber: formData.additionalDetails.accountNumber,
@@ -418,6 +496,14 @@ function getStepDataForValidation(formData: EmployeeFormData, step: number): unk
   }
 }
 
+const EDITABLE_STATUSES = [
+  EmployeeStatus.DRAFT,
+  EmployeeStatus.SUBMITTED,
+  EmployeeStatus.L1_REVIEW,
+  EmployeeStatus.L1_RETURNED,
+  EmployeeStatus.L2_RETURNED,
+];
+
 export async function saveOnboardingStep(
   employeeId: string,
   step: number,
@@ -428,22 +514,15 @@ export async function saveOnboardingStep(
     throw new OnboardingError("Invalid step", "INVALID_STEP");
   }
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
 
   if (!employee) {
     throw new OnboardingError("Application not found", "NOT_FOUND");
   }
 
-  const editableStatuses = [
-    EmployeeStatus.DRAFT,
-    EmployeeStatus.SUBMITTED,
-    EmployeeStatus.L1_REVIEW,
-    EmployeeStatus.L1_RETURNED,
-    EmployeeStatus.L2_RETURNED,
-  ];
-
-  if (!editableStatuses.includes(employee.status)) {
+  if (!EDITABLE_STATUSES.includes(employee.status as EmployeeStatus)) {
     throw new OnboardingError("Application is locked", "LOCKED");
   }
 
@@ -460,49 +539,72 @@ export async function saveOnboardingStep(
     }
   }
 
+  const draft: EmployeeRow = {
+    ...employee,
+    completedSteps: completedStepsOf(employee.completedSteps),
+  };
+
   if (step !== 6) {
-    applyStepData(employee, step, data);
+    applyStepData(draft, step, data);
   }
 
-  if (employee.currentStep > ONBOARDING_TOTAL_STEPS) {
-    employee.currentStep = ONBOARDING_TOTAL_STEPS;
-  }
-  if (Array.isArray(employee.completedSteps)) {
-    employee.completedSteps = employee.completedSteps.filter(
-      (s) => s >= 1 && s <= ONBOARDING_TOTAL_STEPS
-    );
+  if (draft.currentStep > ONBOARDING_TOTAL_STEPS) {
+    draft.currentStep = ONBOARDING_TOTAL_STEPS;
   }
 
-  if (options.markComplete && !employee.completedSteps.includes(step)) {
-    employee.completedSteps = [...employee.completedSteps, step].sort((a, b) => a - b);
+  let completedSteps = completedStepsOf(draft.completedSteps).filter(
+    (s) => s >= 1 && s <= ONBOARDING_TOTAL_STEPS
+  );
+
+  if (options.markComplete && !completedSteps.includes(step)) {
+    completedSteps = [...completedSteps, step].sort((a, b) => a - b);
   }
 
-  if (employee.submittedSnapshot) {
-    const current = mapEmployeeToFormData(employee) as unknown as Record<string, unknown>;
-    employee.pendingFieldChanges = computeFieldChanges(
-      employee.submittedSnapshot as Record<string, unknown>,
+  let pendingFieldChanges: unknown = draft.pendingFieldChanges;
+  if (draft.submittedSnapshot) {
+    const current = mapEmployeeToFormData(draft) as unknown as Record<string, unknown>;
+    pendingFieldChanges = computeFieldChanges(
+      draft.submittedSnapshot as Record<string, unknown>,
       current
     );
   }
 
-  employee.lastSavedAt = new Date();
-  await employee.save();
+  const lastSavedAt = new Date();
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: {
+      personalDetails: asInputJson(draft.personalDetails),
+      address: asInputJson(draft.address),
+      education: asInputJson(draft.education),
+      references: asInputJson(draft.references),
+      familyDetails: asInputJson(draft.familyDetails),
+      nominee: asInputJson(draft.nominee),
+      exServiceman: asInputJson(draft.exServiceman),
+      gunman: asInputJson(draft.gunman),
+      additionalDetails: asInputJson(draft.additionalDetails),
+      declaration: asInputJson(draft.declaration),
+      currentStep: draft.currentStep,
+      completedSteps: asInputJson(completedSteps),
+      pendingFieldChanges: asInputJson(pendingFieldChanges),
+      lastSavedAt,
+      updatedAt: lastSavedAt,
+    },
+  });
 
-  return { savedAt: employee.lastSavedAt.toISOString() };
+  return { savedAt: lastSavedAt.toISOString() };
 }
 
 export async function updateCurrentStep(
   employeeId: string,
   step: number
 ): Promise<void> {
-  await connectDB();
-  await Employee.findByIdAndUpdate(
-    employeeId,
-    {
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: {
       currentStep: Math.min(Math.max(step, 1), ONBOARDING_TOTAL_STEPS),
+      updatedAt: new Date(),
     },
-    { runValidators: true }
-  );
+  });
 }
 
 export async function uploadEmployeeDocument(
@@ -523,20 +625,15 @@ export async function uploadEmployeeDocument(
 
   const mimeType = normalizeMimeType(file.name, file.type);
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId).select("status applicationRef");
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { id: true, status: true, applicationRef: true },
+  });
   if (!employee) {
     throw new OnboardingError("Application not found", "NOT_FOUND");
   }
 
-  const editableStatuses = [
-    EmployeeStatus.DRAFT,
-    EmployeeStatus.SUBMITTED,
-    EmployeeStatus.L1_REVIEW,
-    EmployeeStatus.L1_RETURNED,
-    EmployeeStatus.L2_RETURNED,
-  ];
-  if (!editableStatuses.includes(employee.status)) {
+  if (!EDITABLE_STATUSES.includes(employee.status as EmployeeStatus)) {
     throw new OnboardingError("Application is locked", "LOCKED");
   }
 
@@ -558,67 +655,69 @@ export async function uploadEmployeeDocument(
     throw new OnboardingError(message, "UPLOAD_FAILED");
   }
 
-  const existingDoc = await EmployeeDocument.findOne({
-    employeeId: employee._id,
-    documentType,
-    isActive: true,
+  const existingDoc = await prisma.employeeDocument.findFirst({
+    where: { employeeId: employee.id, documentType, isActive: true },
   });
 
-  let doc: InstanceType<typeof EmployeeDocument>;
   const previousUrl = existingDoc?.url;
+  let doc: DocumentRow;
+  const now = new Date();
 
   if (existingDoc) {
-    existingDoc.fileName = file.name;
-    existingDoc.mimeType = mimeType;
-    existingDoc.sizeBytes = cloudinaryResult.bytes;
-    existingDoc.url = cloudinaryResult.url;
-    existingDoc.version += 1;
-    existingDoc.uploadedBy = "EMPLOYEE";
-    await existingDoc.save();
-    doc = existingDoc;
-  } else {
-    try {
-      doc = await EmployeeDocument.create({
-        employeeId: employee._id,
-        documentType,
+    doc = await prisma.employeeDocument.update({
+      where: { id: existingDoc.id },
+      data: {
         fileName: file.name,
         mimeType,
         sizeBytes: cloudinaryResult.bytes,
         url: cloudinaryResult.url,
-        version: 1,
-        isActive: true,
+        version: existingDoc.version + 1,
         uploadedBy: "EMPLOYEE",
+        updatedAt: now,
+      },
+    });
+  } else {
+    try {
+      doc = await prisma.employeeDocument.create({
+        data: {
+          id: newObjectIdString(),
+          employeeId: employee.id,
+          documentType,
+          fileName: file.name,
+          mimeType,
+          sizeBytes: cloudinaryResult.bytes,
+          url: cloudinaryResult.url,
+          version: 1,
+          isActive: true,
+          uploadedBy: "EMPLOYEE",
+          createdAt: now,
+          updatedAt: now,
+        },
       });
     } catch (error) {
       await deleteDocumentFromCloudinary(cloudinaryResult.url).catch(() => undefined);
 
-      if (
-        error &&
-        typeof error === "object" &&
-        "code" in error &&
-        error.code === 11000
-      ) {
-        const racedDoc = await EmployeeDocument.findOne({
-          employeeId: employee._id,
-          documentType,
-          isActive: true,
-        });
+      // Race: another request may have created the active doc
+      const racedDoc = await prisma.employeeDocument.findFirst({
+        where: { employeeId: employee.id, documentType, isActive: true },
+      });
 
-        if (racedDoc) {
-          const oldUrl = racedDoc.url;
-          racedDoc.fileName = file.name;
-          racedDoc.mimeType = mimeType;
-          racedDoc.sizeBytes = cloudinaryResult.bytes;
-          racedDoc.url = cloudinaryResult.url;
-          racedDoc.version += 1;
-          racedDoc.uploadedBy = "EMPLOYEE";
-          await racedDoc.save();
-          if (oldUrl && oldUrl !== cloudinaryResult.url) {
-            deleteDocumentFromCloudinary(oldUrl).catch(() => undefined);
-          }
-          doc = racedDoc;
-        } else {
-          throw error;
+      if (racedDoc) {
+        const oldUrl = racedDoc.url;
+        doc = await prisma.employeeDocument.update({
+          where: { id: racedDoc.id },
+          data: {
+            fileName: file.name,
+            mimeType,
+            sizeBytes: cloudinaryResult.bytes,
+            url: cloudinaryResult.url,
+            version: racedDoc.version + 1,
+            uploadedBy: "EMPLOYEE",
+            updatedAt: new Date(),
+          },
+        });
+        if (oldUrl && oldUrl !== cloudinaryResult.url) {
+          deleteDocumentFromCloudinary(oldUrl).catch(() => undefined);
         }
       } else {
         throw error;
@@ -630,10 +729,12 @@ export async function uploadEmployeeDocument(
     deleteDocumentFromCloudinary(previousUrl).catch(() => undefined);
   }
 
-  void Employee.updateOne(
-    { _id: employeeId },
-    { $set: { lastSavedAt: new Date() } }
-  );
+  void prisma.employee
+    .update({
+      where: { id: employeeId },
+      data: { lastSavedAt: new Date(), updatedAt: new Date() },
+    })
+    .catch(() => undefined);
 
   return mapDocumentRecord(doc);
 }
@@ -642,34 +743,29 @@ export async function deleteEmployeeDocument(
   employeeId: string,
   documentId: string
 ): Promise<void> {
-  await connectDB();
-  const doc = await EmployeeDocument.findOne({
-    _id: documentId,
-    employeeId,
-    isActive: true,
+  const doc = await prisma.employeeDocument.findFirst({
+    where: { id: documentId, employeeId, isActive: true },
   });
 
   if (!doc) {
     throw new OnboardingError("Document not found", "NOT_FOUND");
   }
 
-  const employee = await Employee.findById(employeeId).select("status");
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { status: true },
+  });
   if (!employee) {
     throw new OnboardingError("Application not found", "NOT_FOUND");
   }
-  const editableStatuses = [
-    EmployeeStatus.DRAFT,
-    EmployeeStatus.SUBMITTED,
-    EmployeeStatus.L1_REVIEW,
-    EmployeeStatus.L1_RETURNED,
-    EmployeeStatus.L2_RETURNED,
-  ];
-  if (!editableStatuses.includes(employee.status)) {
+  if (!EDITABLE_STATUSES.includes(employee.status as EmployeeStatus)) {
     throw new OnboardingError("Application is locked", "LOCKED");
   }
 
-  doc.isActive = false;
-  await doc.save();
+  await prisma.employeeDocument.update({
+    where: { id: doc.id },
+    data: { isActive: false, updatedAt: new Date() },
+  });
 
   if (doc.url) {
     await deleteDocumentFromCloudinary(doc.url);
@@ -680,8 +776,9 @@ export async function submitOnboardingApplication(
   employeeId: string,
   options?: { submittedBy?: string }
 ): Promise<void> {
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) {
     throw new OnboardingError("Application not found", "NOT_FOUND");
   }
@@ -693,11 +790,19 @@ export async function submitOnboardingApplication(
     EmployeeStatus.L1_RETURNED,
     EmployeeStatus.L2_RETURNED,
   ];
-  if (!allowedSubmitStatuses.includes(employee.status)) {
-    throw new OnboardingError("Application cannot be submitted in current status", "LOCKED");
+  if (!allowedSubmitStatuses.includes(employee.status as EmployeeStatus)) {
+    throw new OnboardingError(
+      "Application cannot be submitted in current status",
+      "LOCKED"
+    );
   }
 
-  const formData = mapEmployeeToFormData(employee);
+  const draft: EmployeeRow = {
+    ...employee,
+    completedSteps: completedStepsOf(employee.completedSteps),
+  };
+
+  const formData = mapEmployeeToFormData(draft);
 
   // Ensure declaration fields are usable on edit/resubmit of older records
   const decl = formData.declaration ?? {};
@@ -706,13 +811,14 @@ export async function submitOnboardingApplication(
     decl.signatureDataUrl.startsWith("data:image/") &&
     decl.signatureDataUrl.length > 20;
 
-  const docsEarly = await EmployeeDocument.find({ employeeId, isActive: true });
+  const docsEarly = await prisma.employeeDocument.findMany({
+    where: { employeeId, isActive: true },
+  });
   const hasSignatureUpload = docsEarly.some(
     (d) => d.documentType === DocumentType.SIGNATURE
   );
 
   if (!hasLiveSig && hasSignatureUpload) {
-    // Accept uploaded signature scan in place of live pad for legacy/resubmit flows
     formData.declaration = {
       ...decl,
       agreed: true,
@@ -722,21 +828,21 @@ export async function submitOnboardingApplication(
         "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       signedAt: decl.signedAt || new Date().toISOString(),
     };
-    employee.declaration = formData.declaration as Record<string, unknown>;
+    draft.declaration = formData.declaration as JsonObject;
   } else if (!decl.policeVerificationAccepted && decl.agreed) {
     formData.declaration = {
       ...decl,
       policeVerificationAccepted: true,
     };
-    employee.declaration = formData.declaration as Record<string, unknown>;
+    draft.declaration = formData.declaration as JsonObject;
   }
 
   if (!String(formData.personalDetails.dateOfJoining ?? "").trim()) {
     const timeline = String(formData.additionalDetails.joiningTimeline ?? "").trim();
     if (/^\d{4}-\d{2}-\d{2}/.test(timeline)) {
       formData.personalDetails.dateOfJoining = timeline.slice(0, 10);
-      employee.personalDetails = {
-        ...(employee.personalDetails as Record<string, unknown>),
+      draft.personalDetails = {
+        ...asJsonObject(draft.personalDetails),
         dateOfJoining: formData.personalDetails.dateOfJoining,
       };
     }
@@ -765,7 +871,6 @@ export async function submitOnboardingApplication(
     isExServiceman: Boolean(formDataFull.exServiceman?.isExServiceman),
     isGunman: Boolean(formDataFull.gunman?.isGunman),
   }).filter((t) => {
-    // Live signature satisfies SIGNATURE document requirement
     if (t === DocumentType.SIGNATURE && hasLiveSig) return false;
     return true;
   });
@@ -779,45 +884,70 @@ export async function submitOnboardingApplication(
   }
 
   const snapshot = formDataFull as unknown as Record<string, unknown>;
-  const previousSnapshot = (employee.submittedSnapshot ?? null) as Record<
+  const previousSnapshot = (draft.submittedSnapshot ?? null) as Record<
     string,
     unknown
   > | null;
-  const fromStatusBeforeSubmit = employee.status;
-  const isResubmit = Boolean(previousSnapshot) ||
-    [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW, EmployeeStatus.L1_RETURNED, EmployeeStatus.L2_RETURNED].includes(
-      fromStatusBeforeSubmit
-    );
+  const fromStatusBeforeSubmit = draft.status as EmployeeStatus;
+  const isResubmit =
+    Boolean(previousSnapshot) ||
+    [
+      EmployeeStatus.SUBMITTED,
+      EmployeeStatus.L1_REVIEW,
+      EmployeeStatus.L1_RETURNED,
+      EmployeeStatus.L2_RETURNED,
+    ].includes(fromStatusBeforeSubmit);
 
-  if (isResubmit && previousSnapshot) {
-    employee.pendingFieldChanges = computeFieldChanges(previousSnapshot, snapshot);
-  } else {
-    employee.pendingFieldChanges = [];
-  }
+  const pendingFieldChanges =
+    isResubmit && previousSnapshot
+      ? computeFieldChanges(previousSnapshot, snapshot)
+      : [];
 
-  employee.submittedSnapshot = snapshot;
-  employee.status = EmployeeStatus.SUBMITTED;
-  employee.submittedAt = new Date();
-  employee.completedSteps = Array.from({ length: ONBOARDING_TOTAL_STEPS }, (_, i) => i + 1);
-  employee.currentStep = ONBOARDING_TOTAL_STEPS;
-  employee.correctionNotes = undefined;
-  employee.rejectionReason = undefined;
-  employee.l1Decision = undefined;
-  employee.l2Decision = undefined;
-  if (options?.submittedBy && !employee.submittedBy) {
-    employee.submittedBy = new mongoose.Types.ObjectId(options.submittedBy);
+  let submittedBy = draft.submittedBy;
+  if (options?.submittedBy && !submittedBy) {
+    submittedBy = options.submittedBy;
   }
-  const submitterId = options?.submittedBy ?? employee.submittedBy?.toString();
+  const submitterId = options?.submittedBy ?? submittedBy ?? undefined;
+  let submittedByName = draft.submittedByName;
+  let submittedByEmail = draft.submittedByEmail;
   if (submitterId) {
-    const snapshot = await getSubmitterSnapshot(submitterId);
-    if (snapshot.submittedByName) employee.submittedByName = snapshot.submittedByName;
-    if (snapshot.submittedByEmail) employee.submittedByEmail = snapshot.submittedByEmail;
+    const submitterSnapshot = await getSubmitterSnapshot(submitterId);
+    if (submitterSnapshot.submittedByName) {
+      submittedByName = submitterSnapshot.submittedByName;
+    }
+    if (submitterSnapshot.submittedByEmail) {
+      submittedByEmail = submitterSnapshot.submittedByEmail;
+    }
   }
-  await employee.save();
+
+  const submittedAt = new Date();
+  await prisma.employee.update({
+    where: { id: employeeId },
+    data: {
+      personalDetails: asInputJson(draft.personalDetails),
+      declaration: asInputJson(draft.declaration),
+      submittedSnapshot: asInputJson(snapshot),
+      pendingFieldChanges: asInputJson(pendingFieldChanges),
+      status: EmployeeStatus.SUBMITTED,
+      submittedAt,
+      completedSteps: asInputJson(
+        Array.from({ length: ONBOARDING_TOTAL_STEPS }, (_, i) => i + 1)
+      ),
+      currentStep: ONBOARDING_TOTAL_STEPS,
+      correctionNotes: null,
+      rejectionReason: null,
+      l1Decision: Prisma.DbNull,
+      l2Decision: Prisma.DbNull,
+      submittedBy,
+      submittedByName,
+      submittedByEmail,
+      updatedAt: submittedAt,
+    },
+  });
 
   const { assignL1OnSubmit } = await import("@/lib/services/approval.service");
   await assignL1OnSubmit(employeeId, {
-    performedBy: options?.submittedBy ?? employee.submittedBy?.toString(),
+    performedBy: options?.submittedBy ?? submittedBy ?? undefined,
     isResubmit,
   });
 }

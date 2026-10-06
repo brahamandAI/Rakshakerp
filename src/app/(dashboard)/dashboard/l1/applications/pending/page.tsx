@@ -26,6 +26,7 @@ export default async function L1PendingApplicationsPage() {
       <ApplicationTable
         applications={applications}
         emptyMessage="No applications pending L1 review."
+        exportScope="l1"
       />
     </div>
   );

@@ -53,6 +53,7 @@ export const staffUserSchema = z.object({
     UserRole.SUBMITTER,
     UserRole.L1,
     UserRole.L2,
+    UserRole.SCANNING,
     UserRole.ADMIN,
   ]),
   department: z.string().optional(),
@@ -66,6 +67,7 @@ export const updateStaffUserSchema = z.object({
       UserRole.SUBMITTER,
       UserRole.L1,
       UserRole.L2,
+      UserRole.SCANNING,
       UserRole.ADMIN,
     ])
     .optional(),

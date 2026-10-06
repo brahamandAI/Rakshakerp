@@ -1,6 +1,5 @@
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
+import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import {
   DOCUMENT_LABELS,
   DocumentType,
@@ -12,6 +11,7 @@ import {
 } from "@/lib/cloudinary/config";
 import { moveDocumentInCloudinary } from "@/lib/cloudinary/upload";
 import { EmployeeStatus, UserRole, StaffRole } from "@/types/enums";
+import { decisionAction, asRecord } from "@/lib/services/approval-queue";
 
 export interface DocumentsFolderInfo {
   folderName: string;
@@ -34,6 +34,16 @@ export interface FolderDocumentItem {
   url: string;
 }
 
+type DocumentsFolderJson = {
+  folderName?: string;
+  folderPath?: string;
+  cloudinaryFolder?: string;
+  documentCount?: number;
+  temporaryEmployeeId?: string;
+  employeeName?: string;
+  organizedAt?: string | Date;
+};
+
 function buildFolderName(temporaryEmployeeId: string, employeeName: string): string {
   const idPart = sanitizeFolderSegment(temporaryEmployeeId);
   const namePart = sanitizeFolderSegment(employeeName || "Employee");
@@ -54,6 +64,12 @@ function extensionFromFileName(fileName: string, mimeType: string): string {
   return ".jpg";
 }
 
+function parseDocumentsFolder(value: unknown): DocumentsFolderJson | null {
+  const rec = asRecord(value);
+  if (!rec) return null;
+  return rec as DocumentsFolderJson;
+}
+
 /**
  * After L2 approval + temporary employee ID generation, create the logical
  * Employee Documents folder and move/copy Cloudinary assets into it.
@@ -61,45 +77,68 @@ function extensionFromFileName(fileName: string, mimeType: string): string {
 export async function organizeEmployeeDocumentsFolder(
   employeeId: string
 ): Promise<DocumentsFolderInfo | null> {
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) return null;
 
   const temporaryEmployeeId =
     employee.temporaryEmployeeId || employee.employeeId;
   if (!temporaryEmployeeId) return null;
 
+  const existingFolder = parseDocumentsFolder(employee.documentsFolder);
+
   // Idempotent: if folder already organized, refresh count and return
-  if (employee.documentsFolder?.folderPath && employee.documentsFolder.folderName) {
-    const count = await EmployeeDocument.countDocuments({
-      employeeId: employee._id,
-      isActive: true,
+  if (existingFolder?.folderPath && existingFolder.folderName) {
+    const count = await prisma.employeeDocument.count({
+      where: { employeeId: employee.id, isActive: true },
     });
-    if (employee.documentsFolder.documentCount !== count) {
-      employee.documentsFolder.documentCount = count;
-      await employee.save();
+    if (existingFolder.documentCount !== count) {
+      const updatedFolder = {
+        ...existingFolder,
+        documentCount: count,
+      };
+      await prisma.employee.update({
+        where: { id: employee.id },
+        data: {
+          documentsFolder: updatedFolder as Prisma.InputJsonValue,
+          updatedAt: new Date(),
+        },
+      });
     }
     return {
-      folderName: employee.documentsFolder.folderName,
-      folderPath: employee.documentsFolder.folderPath,
-      cloudinaryFolder: employee.documentsFolder.cloudinaryFolder,
+      folderName: existingFolder.folderName,
+      folderPath: existingFolder.folderPath,
+      cloudinaryFolder: existingFolder.cloudinaryFolder ?? "",
       documentCount: count,
-      temporaryEmployeeId: employee.documentsFolder.temporaryEmployeeId,
-      employeeName: employee.documentsFolder.employeeName,
-      organizedAt: new Date(employee.documentsFolder.organizedAt).toISOString(),
+      temporaryEmployeeId:
+        existingFolder.temporaryEmployeeId ?? temporaryEmployeeId,
+      employeeName: existingFolder.employeeName ?? "Employee",
+      organizedAt: new Date(
+        existingFolder.organizedAt ?? Date.now()
+      ).toISOString(),
     };
   }
 
-  const personal = (employee.personalDetails ?? {}) as { fullName?: string };
-  const employeeName = personal.fullName?.trim() || "Employee";
+  const personal = asRecord(employee.personalDetails) as {
+    fullName?: string;
+  } | null;
+  const employeeName = personal?.fullName?.trim() || "Employee";
   const folderName = buildFolderName(temporaryEmployeeId, employeeName);
   const folderPath = `${EMPLOYEE_DOCUMENTS_MASTER_FOLDER}/${folderName}`;
   const cloudinaryFolder = `${getEmployeeDocumentsCloudinaryRoot()}/${folderName}`;
 
-  const docs = await EmployeeDocument.find({
-    employeeId: employee._id,
-    isActive: true,
+  const docs = await prisma.employeeDocument.findMany({
+    where: { employeeId: employee.id, isActive: true },
   });
+
+  const now = new Date();
+  const docUpdates: Array<{
+    id: string;
+    folderLabel: string;
+    folderRelativePath: string;
+    url: string;
+  }> = [];
 
   for (const doc of docs) {
     const label =
@@ -117,27 +156,49 @@ export async function organizeEmployeeDocumentsFolder(
       mimeType: doc.mimeType,
     });
 
-    doc.folderLabel = label;
-    doc.folderRelativePath = `${labelFolder}/${originalBase.endsWith(ext) ? originalBase : `${publicIdBase}${ext}`}`;
+    const folderRelativePath = `${labelFolder}/${
+      originalBase.endsWith(ext) ? originalBase : `${publicIdBase}${ext}`
+    }`;
 
-    if (moved?.url) {
-      doc.url = moved.url;
-    }
-
-    await doc.save();
+    docUpdates.push({
+      id: doc.id,
+      folderLabel: label,
+      folderRelativePath,
+      url: moved?.url ?? doc.url,
+    });
   }
 
   const documentCount = docs.length;
-  employee.documentsFolder = {
+  const documentsFolder = {
     folderName,
     folderPath,
     cloudinaryFolder,
     documentCount,
     temporaryEmployeeId,
     employeeName,
-    organizedAt: new Date(),
+    organizedAt: now.toISOString(),
   };
-  await employee.save();
+
+  await prisma.$transaction([
+    ...docUpdates.map((u) =>
+      prisma.employeeDocument.update({
+        where: { id: u.id },
+        data: {
+          folderLabel: u.folderLabel,
+          folderRelativePath: u.folderRelativePath,
+          url: u.url,
+          updatedAt: now,
+        },
+      })
+    ),
+    prisma.employee.update({
+      where: { id: employee.id },
+      data: {
+        documentsFolder: documentsFolder as Prisma.InputJsonValue,
+        updatedAt: now,
+      },
+    }),
+  ]);
 
   return {
     folderName,
@@ -146,24 +207,31 @@ export async function organizeEmployeeDocumentsFolder(
     documentCount,
     temporaryEmployeeId,
     employeeName,
-    organizedAt: new Date().toISOString(),
+    organizedAt: now.toISOString(),
   };
 }
 
-function isPostL2Approved(status: EmployeeStatus, employee: {
-  forwardedToAdminAt?: Date;
-  forwardedToSupportAt?: Date;
-  temporaryEmployeeId?: string;
-  l2Decision?: { action?: string };
-}): boolean {
+function isPostL2Approved(
+  status: EmployeeStatus,
+  employee: {
+    forwardedToAdminAt?: Date | null;
+    forwardedToSupportAt?: Date | null;
+    temporaryEmployeeId?: string | null;
+    l2Decision?: { action?: string } | null;
+  }
+): boolean {
   if (employee.temporaryEmployeeId) return true;
   if (employee.forwardedToAdminAt || employee.forwardedToSupportAt) return true;
-  if (employee.l2Decision?.action === "APPROVE" || employee.l2Decision?.action === "FORWARD") {
+  if (
+    employee.l2Decision?.action === "APPROVE" ||
+    employee.l2Decision?.action === "FORWARD"
+  ) {
     return true;
   }
   return [
     EmployeeStatus.APPROVED,
     EmployeeStatus.ID_GENERATED,
+    EmployeeStatus.SCANNING_COMPLETED,
     EmployeeStatus.ID_CARD_ISSUED,
   ].includes(status);
 }
@@ -173,11 +241,11 @@ export function canAccessDocumentsFolder(params: {
   userId: string;
   employee: {
     status: EmployeeStatus;
-    submittedBy?: { toString(): string } | string;
-    temporaryEmployeeId?: string;
-    forwardedToAdminAt?: Date;
-    forwardedToSupportAt?: Date;
-    l2Decision?: { action?: string };
+    submittedBy?: { toString(): string } | string | null;
+    temporaryEmployeeId?: string | null;
+    forwardedToAdminAt?: Date | null;
+    forwardedToSupportAt?: Date | null;
+    l2Decision?: { action?: string } | null;
     documentsFolder?: unknown;
   };
 }): { allowed: boolean; canDownloadZip: boolean; readOnly: boolean; reason?: string } {
@@ -201,7 +269,6 @@ export function canAccessDocumentsFolder(params: {
   }
 
   if (role === UserRole.L2) {
-    // Pending L2 review OR post-approval folder view
     const pending =
       employee.status === EmployeeStatus.L2_REVIEW ||
       employee.l2Decision?.action === "APPROVE" ||
@@ -217,8 +284,19 @@ export function canAccessDocumentsFolder(params: {
     return { allowed: true, canDownloadZip: true, readOnly: true };
   }
 
+  if (role === UserRole.SCANNING) {
+    if (!postApproved) {
+      return {
+        allowed: false,
+        canDownloadZip: false,
+        readOnly: true,
+        reason: "Scanning can access folders only after L2 approval",
+      };
+    }
+    return { allowed: true, canDownloadZip: true, readOnly: true };
+  }
+
   if (role === UserRole.L1) {
-    // L1 may view documents only during the L1 approval process
     const reviewing = [
       EmployeeStatus.SUBMITTED,
       EmployeeStatus.L1_REVIEW,
@@ -247,7 +325,6 @@ export function canAccessDocumentsFolder(params: {
         reason: "Submitters can only access their own employee folders",
       };
     }
-    // Own folder only — available once organized after L2 approval
     return { allowed: true, canDownloadZip: false, readOnly: true };
   }
 
@@ -281,72 +358,70 @@ export async function listEmployeeDocumentFolders(params: {
   masterFolder: string;
   folders: MasterFolderListItem[];
 }> {
-  await connectDB();
-
-  const query: Record<string, unknown> = {
-    "documentsFolder.folderPath": { $exists: true, $ne: null },
-  };
-
-  if (params.role === UserRole.SUBMITTER) {
-    query.submittedBy = params.userId;
-  } else if (params.role === UserRole.SUPPORT) {
-    query.$or = [
-      { temporaryEmployeeId: { $exists: true, $ne: null } },
-      { forwardedToAdminAt: { $exists: true } },
-      { forwardedToSupportAt: { $exists: true } },
-      { "l2Decision.action": { $in: ["APPROVE", "FORWARD"] } },
-      {
-        status: {
-          $in: [
-            EmployeeStatus.APPROVED,
-            EmployeeStatus.ID_GENERATED,
-            EmployeeStatus.ID_CARD_ISSUED,
-          ],
-        },
-      },
-    ];
-  } else if (params.role === UserRole.L2) {
-    // L2 sees folders after their approval (organized folders)
-    query.$or = [
-      { temporaryEmployeeId: { $exists: true, $ne: null } },
-      { "l2Decision.action": { $in: ["APPROVE", "FORWARD"] } },
-      {
-        status: {
-          $in: [
-            EmployeeStatus.APPROVED,
-            EmployeeStatus.ID_GENERATED,
-            EmployeeStatus.ID_CARD_ISSUED,
-          ],
-        },
-      },
-    ];
-  } else if (params.role === UserRole.L1) {
-    // L1 does not browse the master folder — only during detail review
+  if (params.role === UserRole.L1) {
     return { masterFolder: EMPLOYEE_DOCUMENTS_MASTER_FOLDER, folders: [] };
   }
-  // Admin: all organized folders
 
-  const employees = await Employee.find(query)
-    .select("applicationRef documentsFolder submittedBy status temporaryEmployeeId forwardedToAdminAt forwardedToSupportAt l2Decision")
-    .sort({ "documentsFolder.organizedAt": -1 })
-    .lean();
+  const candidates = await prisma.employee.findMany({
+    where: {
+      ...(params.role === UserRole.SUBMITTER
+        ? { submittedBy: params.userId }
+        : {}),
+      NOT: { documentsFolder: { equals: Prisma.DbNull } },
+    },
+    select: {
+      id: true,
+      applicationRef: true,
+      documentsFolder: true,
+      submittedBy: true,
+      status: true,
+      temporaryEmployeeId: true,
+      forwardedToAdminAt: true,
+      forwardedToSupportAt: true,
+      l2Decision: true,
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 2000,
+  });
 
   const folders: MasterFolderListItem[] = [];
 
-  for (const emp of employees) {
-    const df = emp.documentsFolder;
+  for (const emp of candidates) {
+    const df = parseDocumentsFolder(emp.documentsFolder);
     if (!df?.folderName || !df?.folderPath) continue;
+
+    // Preserve prior role filters that used Mongo $or for support/L2
+    if (
+      params.role === UserRole.SUPPORT ||
+      params.role === UserRole.L2 ||
+      params.role === UserRole.SCANNING
+    ) {
+      const l2Action = decisionAction(emp.l2Decision);
+      const eligible =
+        Boolean(emp.temporaryEmployeeId) ||
+        Boolean(emp.forwardedToAdminAt) ||
+        Boolean(emp.forwardedToSupportAt) ||
+        l2Action === "APPROVE" ||
+        l2Action === "FORWARD" ||
+        [
+          EmployeeStatus.APPROVED,
+          EmployeeStatus.ID_GENERATED,
+          EmployeeStatus.SCANNING_COMPLETED,
+          EmployeeStatus.ID_CARD_ISSUED,
+        ].includes(emp.status as EmployeeStatus);
+      if (!eligible) continue;
+    }
 
     const access = canAccessDocumentsFolder({
       role: params.role,
       userId: params.userId,
       employee: {
-        status: emp.status,
-        submittedBy: emp.submittedBy?.toString(),
+        status: emp.status as EmployeeStatus,
+        submittedBy: emp.submittedBy ?? undefined,
         temporaryEmployeeId: emp.temporaryEmployeeId,
         forwardedToAdminAt: emp.forwardedToAdminAt,
         forwardedToSupportAt: emp.forwardedToSupportAt,
-        l2Decision: emp.l2Decision ? { action: emp.l2Decision.action } : undefined,
+        l2Decision: l2DecisionAction(emp.l2Decision),
         documentsFolder: df,
       },
     });
@@ -354,21 +429,30 @@ export async function listEmployeeDocumentFolders(params: {
     if (!access.allowed) continue;
 
     folders.push({
-      employeeId: String(emp._id),
+      employeeId: emp.id,
       folderName: df.folderName,
       folderPath: df.folderPath,
       documentCount: df.documentCount ?? 0,
-      temporaryEmployeeId: df.temporaryEmployeeId,
-      employeeName: df.employeeName,
-      organizedAt: new Date(df.organizedAt).toISOString(),
+      temporaryEmployeeId: df.temporaryEmployeeId ?? emp.temporaryEmployeeId ?? "",
+      employeeName: df.employeeName ?? "Employee",
+      organizedAt: new Date(df.organizedAt ?? Date.now()).toISOString(),
       applicationRef: emp.applicationRef,
     });
   }
+
+  folders.sort((a, b) => b.organizedAt.localeCompare(a.organizedAt));
 
   return {
     masterFolder: EMPLOYEE_DOCUMENTS_MASTER_FOLDER,
     folders,
   };
+}
+
+function l2DecisionAction(
+  value: unknown
+): { action?: string } | undefined {
+  const action = decisionAction(value);
+  return action ? { action } : undefined;
 }
 
 export async function getEmployeeDocumentsFolder(
@@ -383,44 +467,58 @@ export async function getEmployeeDocumentsFolder(
   forwardedToSupportAt?: Date;
   l2Decision?: { action?: string };
 } | null> {
-  await connectDB();
-  let employee = await Employee.findById(employeeId).lean();
+  let employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) return null;
+
+  let folderJson = parseDocumentsFolder(employee.documentsFolder);
 
   // Lazy organize for already-approved registrations missing a folder
   if (
-    !employee.documentsFolder?.folderPath &&
+    !folderJson?.folderPath &&
     (employee.temporaryEmployeeId || employee.employeeId) &&
-    isPostL2Approved(employee.status, employee)
+    isPostL2Approved(employee.status as EmployeeStatus, {
+      temporaryEmployeeId: employee.temporaryEmployeeId,
+      forwardedToAdminAt: employee.forwardedToAdminAt,
+      forwardedToSupportAt: employee.forwardedToSupportAt,
+      l2Decision: l2DecisionAction(employee.l2Decision),
+    })
   ) {
     await organizeEmployeeDocumentsFolder(employeeId);
-    employee = await Employee.findById(employeeId).lean();
+    employee = await prisma.employee.findUnique({
+      where: { id: employeeId },
+    });
     if (!employee) return null;
+    folderJson = parseDocumentsFolder(employee.documentsFolder);
   }
 
-  const docs = await EmployeeDocument.find({
-    employeeId,
-    isActive: true,
-  })
-    .sort({ documentType: 1 })
-    .lean();
+  const docs = await prisma.employeeDocument.findMany({
+    where: { employeeId, isActive: true },
+    orderBy: { documentType: "asc" },
+  });
 
-  const folder = employee.documentsFolder
+  const folder = folderJson?.folderName && folderJson.folderPath
     ? {
-        folderName: employee.documentsFolder.folderName,
-        folderPath: employee.documentsFolder.folderPath,
-        cloudinaryFolder: employee.documentsFolder.cloudinaryFolder,
-        documentCount: employee.documentsFolder.documentCount,
-        temporaryEmployeeId: employee.documentsFolder.temporaryEmployeeId,
-        employeeName: employee.documentsFolder.employeeName,
-        organizedAt: new Date(employee.documentsFolder.organizedAt).toISOString(),
+        folderName: folderJson.folderName,
+        folderPath: folderJson.folderPath,
+        cloudinaryFolder: folderJson.cloudinaryFolder ?? "",
+        documentCount: folderJson.documentCount ?? docs.length,
+        temporaryEmployeeId:
+          folderJson.temporaryEmployeeId ??
+          employee.temporaryEmployeeId ??
+          "",
+        employeeName: folderJson.employeeName ?? "Employee",
+        organizedAt: new Date(
+          folderJson.organizedAt ?? Date.now()
+        ).toISOString(),
       }
     : null;
 
   return {
     folder,
     documents: docs.map((d) => ({
-      _id: String(d._id),
+      _id: d.id,
       documentType: d.documentType,
       label:
         d.folderLabel ||
@@ -434,13 +532,11 @@ export async function getEmployeeDocumentsFolder(
         `${DOCUMENT_LABELS[d.documentType as DocumentType] || d.documentType}/${d.fileName}`,
       url: d.url,
     })),
-    employeeStatus: employee.status,
-    submittedBy: employee.submittedBy?.toString(),
-    temporaryEmployeeId: employee.temporaryEmployeeId,
-    forwardedToAdminAt: employee.forwardedToAdminAt,
-    forwardedToSupportAt: employee.forwardedToSupportAt,
-    l2Decision: employee.l2Decision
-      ? { action: employee.l2Decision.action }
-      : undefined,
+    employeeStatus: employee.status as EmployeeStatus,
+    submittedBy: employee.submittedBy ?? undefined,
+    temporaryEmployeeId: employee.temporaryEmployeeId ?? undefined,
+    forwardedToAdminAt: employee.forwardedToAdminAt ?? undefined,
+    forwardedToSupportAt: employee.forwardedToSupportAt ?? undefined,
+    l2Decision: l2DecisionAction(employee.l2Decision),
   };
 }

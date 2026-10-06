@@ -27,6 +27,7 @@ export default async function L1ApprovedApplicationsPage() {
         applications={applications}
         showEmployeeId
         emptyMessage="No approved applications yet."
+        exportScope="l1"
       />
     </div>
   );

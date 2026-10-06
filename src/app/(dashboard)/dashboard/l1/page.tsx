@@ -108,6 +108,7 @@ export default async function L1DashboardPage() {
             applications={reversedFromL2.slice(0, 5)}
             emptyMessage="No applications reversed from L2"
             showL2ReverseNote
+            exportScope="l1"
           />
         </DashboardSection>
       )}
@@ -127,6 +128,7 @@ export default async function L1DashboardPage() {
         <ApplicationTable
           applications={recent}
           emptyMessage="No pending applications right now"
+          exportScope="l1"
         />
       </DashboardSection>
     </div>

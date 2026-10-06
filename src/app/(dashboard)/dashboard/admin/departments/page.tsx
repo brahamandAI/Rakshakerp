@@ -14,7 +14,7 @@ export default async function AdminDepartmentsPage() {
     _id: String(d._id),
     name: d.name,
     code: d.code,
-    description: d.description,
+    description: d.description ?? undefined,
     isActive: d.isActive,
   }));
 

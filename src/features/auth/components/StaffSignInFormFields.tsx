@@ -92,50 +92,50 @@ export function StaffSignInFormFields({
         />
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <Label
-            htmlFor={passwordId}
-            required
-            className="text-[13px] font-semibold tracking-wide text-[#1E293B]"
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <Label
+          htmlFor={passwordId}
+          required
+          className="text-[13px] font-semibold tracking-wide text-[#1E293B]"
+        >
+          Password
+        </Label>
+        {showForgotPassword && (
+          <Link
+            href="/staff/forgot-password"
+            className="text-xs font-semibold text-[#0284C7] transition-all duration-200 hover:text-[#0369A1] hover:underline"
           >
-            Password
-          </Label>
-          {showForgotPassword && (
-            <Link
-              href="/staff/forgot-password"
-              className="text-xs font-semibold text-[#0284C7] transition-all duration-200 hover:text-[#0369A1] hover:underline"
-            >
-              Forgot password?
-            </Link>
-          )}
-        </div>
-        <div className="relative">
-          <Input
-            id={passwordId}
-            name="password"
-            type={showPassword ? "text" : "password"}
-            placeholder="Enter your password"
-            autoComplete="current-password"
-            required
-            disabled={isLoading}
-            className={cn(fieldControlClass, "pr-11")}
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#64748B] transition-all duration-200 hover:bg-[#E2E8F0]/70 hover:text-[#0B1F3A]"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            tabIndex={-1}
-          >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
-          </button>
-        </div>
+            Forgot password?
+          </Link>
+        )}
       </div>
+      <div className="relative mb-1">
+        <Input
+          id={passwordId}
+          name="password"
+          type={showPassword ? "text" : "password"}
+          placeholder="Enter your password"
+          autoComplete="current-password"
+          required
+          disabled={isLoading}
+          className={cn(fieldControlClass, "pr-11")}
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword((v) => !v)}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[#64748B] transition-all duration-200 hover:bg-[#E2E8F0]/70 hover:text-[#0B1F3A]"
+          aria-label={showPassword ? "Hide password" : "Show password"}
+          tabIndex={-1}
+        >
+          {showPassword ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+    </div>
     </div>
   );
 }

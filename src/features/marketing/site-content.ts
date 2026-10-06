@@ -21,7 +21,7 @@ export const SITE = {
   address:
     "T-5, Plot No. 12, Manish Plaza-III, Sector-10, Dwarka, New Delhi – 110075, India",
   officeHours: "Monday – Saturday: 9:00 AM – 6:00 PM",
-  heroImage: "/marketing/hero-pattern.svg",
+  heroImage: "/marketing/enrollment-hero-visual.jpg",
   founded: "",
 } as const;
 

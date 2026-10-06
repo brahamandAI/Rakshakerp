@@ -30,6 +30,7 @@ export default async function AdminRegistrationsPage() {
         showSubmitter
         viewPathPrefix="/dashboard/admin/registrations"
         emptyMessage="No L2-approved registrations have been forwarded yet."
+        exportScope="admin"
       />
     </div>
   );

@@ -70,13 +70,14 @@ export function MarketingNavbar() {
         </nav>
 
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
-          <StaffSignInButton variant="default" />
+          <StaffSignInButton variant="sky" className="rounded-full" />
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleSectionClick("contact")}
+            className="rounded-full"
           >
-            Contact Us
+            Contact us
           </Button>
         </div>
 

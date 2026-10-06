@@ -1,7 +1,6 @@
 import { requireStaffAuth } from "@/lib/auth/guards";
-import { UserRole } from "@/types/enums";
-import { connectDB } from "@/lib/db/connect";
-import { User } from "@/lib/db/models/User";
+import { StaffRole, UserRole } from "@/types/enums";
+import { prisma } from "@/lib/db/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardBackLink } from "@/components/dashboard/DashboardBackLink";
 import { ProfileEditForm } from "@/features/admin/components/ProfileEditForm";
@@ -12,8 +11,17 @@ export const metadata = { title: "Profile | Admin" };
 export default async function AdminProfilePage() {
   const { user } = await requireStaffAuth(UserRole.ADMIN);
 
-  await connectDB();
-  const dbUser = await User.findById(user.id).lean();
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      name: true,
+      email: true,
+      role: true,
+      department: true,
+      phone: true,
+      lastLoginAt: true,
+    },
+  });
 
   if (!dbUser) {
     return <p>User not found.</p>;
@@ -32,9 +40,9 @@ export default async function AdminProfilePage() {
           user={{
             name: dbUser.name,
             email: dbUser.email,
-            role: dbUser.role,
-            department: dbUser.department,
-            phone: dbUser.phone,
+            role: dbUser.role as StaffRole,
+            department: dbUser.department ?? undefined,
+            phone: dbUser.phone ?? undefined,
             lastLoginAt: dbUser.lastLoginAt?.toISOString(),
           }}
         />

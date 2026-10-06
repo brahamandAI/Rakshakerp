@@ -18,6 +18,7 @@ const CREATABLE_ROLES = [
   UserRole.SUBMITTER,
   UserRole.L1,
   UserRole.L2,
+  UserRole.SCANNING,
   UserRole.ADMIN,
 ] as const;
 

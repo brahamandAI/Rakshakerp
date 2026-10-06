@@ -147,6 +147,8 @@ export function serializeReviewEmployee(employee: {
   submittedByEmail?: unknown;
   l1Decision?: ReviewDecision | null;
   l2Decision?: ReviewDecision | null;
+  scanningDecision?: ReviewDecision | null;
+  scanningCompletedAt?: unknown;
   correctionNotes?: string;
   rejectionReason?: string;
   forwardedToSupportAt?: unknown;
@@ -177,6 +179,8 @@ export function serializeReviewEmployee(employee: {
     submittedBy: resolveSubmittedBy(employee),
     l1Decision: clientDecision(employee.l1Decision),
     l2Decision: clientDecision(employee.l2Decision),
+    scanningDecision: clientDecision(employee.scanningDecision),
+    scanningCompletedAt: clientIsoDate(employee.scanningCompletedAt),
     correctionNotes: employee.correctionNotes,
     rejectionReason: employee.rejectionReason,
     forwardedToSupportAt: clientIsoDate(employee.forwardedToSupportAt),

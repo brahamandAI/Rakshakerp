@@ -89,16 +89,16 @@ const TONE_STYLES: Record<
     iconText: "text-[#1D4ED8]",
   },
   blue: {
-    value: "text-[#1D4ED8]",
-    bar: "from-[#1D4ED8] to-[#38BDF8]",
-    iconBg: "bg-[#EFF6FF]",
-    iconText: "text-[#1D4ED8]",
+    value: "text-[#0284C7]",
+    bar: "from-[#0EA5E9] to-[#1E90FF]",
+    iconBg: "bg-[#E0F2FE]",
+    iconText: "text-[#0284C7]",
   },
   green: {
-    value: "text-[#15803D]",
-    bar: "from-[#15803D] to-[#4ADE80]",
-    iconBg: "bg-[#F0FDF4]",
-    iconText: "text-[#15803D]",
+    value: "text-[#059669]",
+    bar: "from-[#10B981] to-[#34D399]",
+    iconBg: "bg-[#ECFDF5]",
+    iconText: "text-[#059669]",
   },
   amber: {
     value: "text-[#B45309]",
@@ -164,7 +164,7 @@ export function DashboardStatCard({
         <p className="mt-1.5 text-xs leading-relaxed text-[#94A3B8]">{description ?? hint}</p>
       )}
       {href && (
-        <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#1D4ED8] transition group-hover:gap-2">
+        <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-[#0284C7] transition group-hover:gap-2">
           {linkLabel}
           <span aria-hidden>→</span>
         </span>

@@ -1,11 +1,17 @@
-import { User } from "@/lib/db/models/User";
+import { prisma } from "@/lib/db/prisma";
 
 export async function getSubmitterSnapshot(userId?: string | null): Promise<{
   submittedByName?: string;
   submittedByEmail?: string;
 }> {
   if (!userId) return {};
-  const user = await User.findById(userId).select("name email").lean();
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      name: true,
+      email: true,
+    },
+  });
   if (!user) return {};
   return {
     submittedByName: user.name,

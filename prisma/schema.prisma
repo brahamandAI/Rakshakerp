@@ -1,0 +1,362 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// User — staff auth, lockout, password reset, admin management
+// ---------------------------------------------------------------------------
+model User {
+  id                   String    @id
+  email                String    @unique
+  passwordHash         String
+  name                 String
+  role                 String
+  department           String?
+  phone                String?
+  isActive             Boolean
+  failedLoginAttempts  Int       @default(0)
+  lockedUntil          DateTime?
+  passwordChangedAt    DateTime?
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  createdBy            String?
+  lastLoginAt          DateTime?
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  createdByUser User?  @relation("UserCreatedBy", fields: [createdBy], references: [id])
+  createdUsers  User[] @relation("UserCreatedBy")
+
+  approvalHistories ApprovalHistory[]
+  auditLogs         AuditLog[]
+  downloadLogs      IdCardDownloadLog[]
+  notifications     Notification[]
+  idCardsGenerated  IdCard[]            @relation("IdCardGeneratedBy")
+  idCardsCompleted  IdCard[]            @relation("IdCardCompletedBy")
+
+  @@index([role, isActive])
+  @@index([resetPasswordToken])
+  @@index([createdBy])
+  @@map("users")
+}
+
+// ---------------------------------------------------------------------------
+// Org master data
+// ---------------------------------------------------------------------------
+model Department {
+  id           String        @id
+  name         String
+  code         String
+  description  String?
+  isActive     Boolean
+  createdAt    DateTime
+  updatedAt    DateTime
+  designations Designation[]
+
+  @@map("departments")
+}
+
+model Designation {
+  id           String     @id
+  code         String
+  name         String
+  departmentId String
+  isActive     Boolean
+  level        Int?
+  createdAt    DateTime
+  updatedAt    DateTime
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId])
+  @@map("designations")
+}
+
+model SiteLocation {
+  id            String   @id
+  name          String
+  code          String
+  address       String?
+  city          String
+  state         String
+  pincode       String?
+  contactPerson String?
+  contactPhone  String?
+  isActive      Boolean
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  @@map("sitelocations")
+}
+
+// ---------------------------------------------------------------------------
+// Employee — full onboarding + approval workflow (nested blobs as Json)
+// ---------------------------------------------------------------------------
+model Employee {
+  id                   String    @id
+  applicationRef       String    @unique
+  email                String
+  phone                String
+  status               String
+  currentStep          Int
+  completedSteps       Json
+  /// Official / permanent employee ID (support-generated)
+  employeeId           String?   @unique
+  /// Temporary ID generated after L2 approval
+  temporaryEmployeeId  String?   @unique
+
+  // Onboarding form sections (Mongo Mixed → Json)
+  personalDetails      Json
+  address              Json?
+  education            Json?
+  references           Json?
+  familyDetails        Json?
+  nominee              Json?
+  exServiceman         Json?
+  gunman               Json?
+  additionalDetails    Json?
+  declaration          Json?
+
+  // Correction / resubmit
+  correctionNotes      String?
+  correctionSteps      Json?
+  rejectionReason      String?
+  submittedSnapshot    Json?
+  pendingFieldChanges  Json?
+
+  // Submitter attribution (string IDs; no FK — may be legacy)
+  submittedBy          String?
+  submittedByName      String?
+  submittedByEmail     String?
+  submittedAt          DateTime?
+
+  // L1 / L2 assignment + decisions
+  assignedL1Id         String?
+  l1Decision           Json?
+  l1ApprovedAt         DateTime?
+  assignedL2Id         String?
+  l2Decision           Json?
+  approvedAt           DateTime?
+  idGeneratedAt        DateTime?
+
+  // Scanning
+  scanningDecision     Json?
+  scanningCompletedAt  DateTime?
+
+  // Forwarding
+  forwardedToSupportAt DateTime?
+  forwardedToAdminAt   DateTime?
+
+  lastSavedAt          DateTime?
+  documentsFolder      Json?
+
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  approvalHistory ApprovalHistory[]
+  documents       EmployeeDocument[]
+  downloadLogs    IdCardDownloadLog[]
+  idCard          IdCard?
+  notifications   Notification[]
+
+  @@index([email, status])
+  @@index([status, createdAt])
+  @@index([status, updatedAt])
+  @@index([updatedAt])
+  @@index([submittedBy])
+  @@index([temporaryEmployeeId])
+  @@index([forwardedToAdminAt])
+  @@index([forwardedToSupportAt])
+  @@map("employees")
+}
+
+// ---------------------------------------------------------------------------
+// Documents — Cloudinary metadata + folder display paths
+// ---------------------------------------------------------------------------
+model EmployeeDocument {
+  id                 String   @id
+  employeeId         String
+  documentType       String
+  fileName           String
+  mimeType           String
+  sizeBytes          Int
+  url                String
+  version            Int
+  isActive           Boolean
+  uploadedBy         String
+  folderRelativePath String?
+  folderLabel        String?
+  createdAt          DateTime
+  updatedAt          DateTime
+  employee           Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([url])
+  @@map("employeedocuments")
+}
+
+// ---------------------------------------------------------------------------
+// Approval history
+// ---------------------------------------------------------------------------
+model ApprovalHistory {
+  id                  String   @id
+  employeeId          String
+  fromStatus          String
+  toStatus            String
+  action              String
+  performedBy         String?
+  performedByLegacyId String?
+  performedByRole     String
+  comment             String?
+  createdAt           DateTime
+
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  performer User?    @relation(fields: [performedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([performedBy])
+  @@map("approvalhistories")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+model Notification {
+  id                String    @id
+  recipientType     String
+  recipientId       String?
+  recipientLegacyId String?
+  employeeId        String?
+  applicationRef    String?
+  type              String
+  title             String
+  body              String
+  linkUrl           String?
+  readAt            DateTime?
+  createdAt         DateTime
+  employee          Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  recipientUser     User?     @relation(fields: [recipientId], references: [id])
+
+  @@index([employeeId])
+  @@index([recipientId])
+  @@index([recipientType, recipientId, createdAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Audit logs
+// ---------------------------------------------------------------------------
+model AuditLog {
+  id              String   @id
+  action          String
+  entity          String
+  entityId        String?
+  performedBy     String?
+  performedByName String
+  performedByRole String
+  details         Json?
+  ipAddress       String?
+  createdAt       DateTime
+  performedByUser User?    @relation(fields: [performedBy], references: [id])
+
+  @@index([entity, entityId])
+  @@index([performedBy])
+  @@index([createdAt])
+  @@map("auditlogs")
+}
+
+// ---------------------------------------------------------------------------
+// ID cards (app collection historically: employee_id_cards → table idcards)
+// ---------------------------------------------------------------------------
+model IdCard {
+  id             String    @id
+  employeeId     String    @unique
+  employeeIdCode String
+  employeeName   String?
+  photoUrl       String?
+  designation    String?
+  department     String?
+  branch         String?
+  bloodGroup     String?
+  dateOfBirth    String?
+  address        String?
+  qrCodeUrl      String?
+  issueDate      DateTime?
+  expiryDate     DateTime?
+  url            String
+  downloadUrl    String?
+  format         String
+  status         String
+  cardStatus     String?
+  generatedBy    String?
+  completedAt    DateTime?
+  completedBy    String?
+  generatedAt    DateTime
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  employee            Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  generatedByUser     User?                @relation("IdCardGeneratedBy", fields: [generatedBy], references: [id])
+  completedByUser     User?                @relation("IdCardCompletedBy", fields: [completedBy], references: [id])
+  downloadLogs        IdCardDownloadLog[]
+
+  @@index([employeeIdCode])
+  @@index([generatedBy])
+  @@index([completedBy])
+  @@map("idcards")
+}
+
+model IdCardDownloadLog {
+  id              String   @id
+  idCardId        String?
+  employeeId      String
+  employeeIdCode  String
+  employeeName    String
+  action          String
+  performedBy     String
+  performedByRole String
+  createdAt       DateTime
+
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  performedByUser User     @relation(fields: [performedBy], references: [id])
+  idCard          IdCard?  @relation(fields: [idCardId], references: [id])
+
+  @@index([employeeId])
+  @@index([performedBy])
+  @@index([idCardId])
+  @@index([createdAt])
+  @@map("idcarddownloadlogs")
+}
+
+// ---------------------------------------------------------------------------
+// Settings + OTP
+// ---------------------------------------------------------------------------
+model Setting {
+  id        String   @id
+  key       String   @unique
+  value     Json
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@map("settings")
+}
+
+model OtpToken {
+  id             String    @id
+  applicationRef String
+  email          String
+  hashedOtp      String
+  purpose        String
+  expiresAt      DateTime
+  attempts       Int       @default(0)
+  usedAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([applicationRef, email])
+  @@index([expiresAt])
+  @@map("otptokens")
+}

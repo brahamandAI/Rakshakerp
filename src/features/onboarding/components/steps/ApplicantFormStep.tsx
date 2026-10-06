@@ -13,6 +13,14 @@ import {
   ApplicantFormInput,
 } from "@/features/onboarding/schemas/onboarding.schema";
 import { BLOOD_GROUPS, QUALIFICATIONS } from "@/features/onboarding/constants";
+import {
+  BANK_SELECT_OPTIONS,
+  DESIGNATION_SELECT_OPTIONS,
+  findBankByCode,
+  findBankByName,
+  findDesignationByCode,
+  findDesignationByName,
+} from "@/features/onboarding/masters/payroll-codes";
 import { useAutoSave } from "@/features/onboarding/components/AutoSaveIndicator";
 import { FormSection } from "@/features/onboarding/components/FormSection";
 import { EmployeeFormData } from "@/features/onboarding/types";
@@ -113,7 +121,10 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
       dateOfJoining: pd.dateOfJoining ?? "",
       dateOfLeaving: pd.dateOfLeaving ?? "",
       postAppliedFor: pd.postAppliedFor ?? "",
-      designationCode: pd.designationCode ?? "",
+      designationCode:
+        pd.designationCode ||
+        findDesignationByName(pd.postAppliedFor ?? "")?.code ||
+        "",
       department: pd.department ?? "",
       division: pd.division ?? "",
       employeeType: pd.employeeType ?? "G",
@@ -168,11 +179,12 @@ function buildDefaults(formData: EmployeeFormData): ApplicantFormInput {
       pfApplicable: (add.pfApplicable === "YES" || add.pfApplicable === "NO"
         ? add.pfApplicable
         : "") as ApplicantFormInput["additionalDetails"]["pfApplicable"],
-      pfNumber: add.pfNumber ?? "",
       ptApplicable: (add.ptApplicable === "YES" || add.ptApplicable === "NO"
         ? add.ptApplicable
         : "") as ApplicantFormInput["additionalDetails"]["ptApplicable"],
       bankName: add.bankName ?? "",
+      bankCode:
+        add.bankCode || findBankByName(add.bankName ?? "")?.code || "",
       bankBranchName: add.bankBranchName ?? "",
       accountHolderName: add.accountHolderName ?? "",
       accountNumber: add.accountNumber ?? "",
@@ -205,8 +217,43 @@ export function ApplicantFormStep({
 
   useAutoSave(watch(), onAutoSave);
   const sameAsPresent = watch("address.sameAsPresent");
+  const selectedDesignation = watch("personalDetails.postAppliedFor");
+  const selectedBank = watch("additionalDetails.bankName");
+
+  const designationOptions = DESIGNATION_SELECT_OPTIONS.some(
+    (o) => o.value === selectedDesignation
+  )
+    ? DESIGNATION_SELECT_OPTIONS
+    : selectedDesignation
+      ? [
+          ...DESIGNATION_SELECT_OPTIONS,
+          { value: selectedDesignation, label: selectedDesignation },
+        ]
+      : DESIGNATION_SELECT_OPTIONS;
+
+  const bankOptions = BANK_SELECT_OPTIONS.some((o) => o.value === selectedBank)
+    ? BANK_SELECT_OPTIONS
+    : selectedBank
+      ? [...BANK_SELECT_OPTIONS, { value: selectedBank, label: selectedBank }]
+      : BANK_SELECT_OPTIONS;
 
   function submitStep(data: ApplicantFormInput) {
+    const designation =
+      findDesignationByName(data.personalDetails.postAppliedFor) ??
+      findDesignationByCode(data.personalDetails.designationCode ?? "");
+    if (designation) {
+      data.personalDetails.postAppliedFor = designation.name;
+      data.personalDetails.designationCode = designation.code;
+    }
+
+    const bank =
+      findBankByName(data.additionalDetails.bankName) ??
+      findBankByCode(data.additionalDetails.bankCode ?? "");
+    if (bank) {
+      data.additionalDetails.bankName = bank.name;
+      data.additionalDetails.bankCode = bank.code;
+    }
+
     if (registrationMode) {
       const parsed = applySchema
         .extend({
@@ -268,11 +315,25 @@ export function ApplicantFormStep({
           </div>
           <div className="space-y-2">
             <Label required>Post Applied For / Designation</Label>
-            <Input {...register("personalDetails.postAppliedFor")} placeholder="Security Guard / Supervisor / Gunman" error={errors.personalDetails?.postAppliedFor?.message} />
-          </div>
-          <div className="space-y-2">
-            <Label>Designation Code</Label>
-            <Input {...register("personalDetails.designationCode")} placeholder="If different from post" />
+            <Select
+              {...register("personalDetails.postAppliedFor", {
+                onChange: (e) => {
+                  const name = e.target.value;
+                  const match = findDesignationByName(name);
+                  setValue("personalDetails.postAppliedFor", name, {
+                    shouldValidate: true,
+                  });
+                  setValue(
+                    "personalDetails.designationCode",
+                    match?.code ?? "",
+                    { shouldValidate: true }
+                  );
+                },
+              })}
+              options={designationOptions}
+              error={errors.personalDetails?.postAppliedFor?.message}
+            />
+            <input type="hidden" {...register("personalDetails.designationCode")} />
           </div>
           <div className="space-y-2">
             <Label>Department</Label>
@@ -378,7 +439,7 @@ export function ApplicantFormStep({
           </div>
           {watch("personalDetails.maritalStatus") === "MARRIED" && (
             <div className="space-y-2">
-              <Label required>Spouse Name</Label>
+              <Label>Spouse Name</Label>
               <Input
                 {...register("personalDetails.spouseOrNok")}
                 error={errors.personalDetails?.spouseOrNok?.message}
@@ -552,10 +613,6 @@ export function ApplicantFormStep({
             </p>
           </div>
           <div className="space-y-2">
-            <Label>PF No</Label>
-            <Input {...register("additionalDetails.pfNumber")} />
-          </div>
-          <div className="space-y-2">
             <Label>ESI Applicable</Label>
             <Select
               {...register("additionalDetails.esiApplicable")}
@@ -595,27 +652,54 @@ export function ApplicantFormStep({
           <div className="sm:col-span-2 space-y-4 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
             <div>
               <h4 className="text-sm font-semibold text-[#0F172A]">Bank Details</h4>
-              <p className="mt-0.5 text-xs text-[#64748B]">Optional — fill if available.</p>
+              <p className="mt-0.5 text-xs text-[#64748B]">
+                Required for payroll — select bank name from the list.
+              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Bank Name</Label>
-                <Input {...register("additionalDetails.bankName")} error={errors.additionalDetails?.bankName?.message} />
+                <Label required>Bank Name</Label>
+                <Select
+                  {...register("additionalDetails.bankName", {
+                    onChange: (e) => {
+                      const name = e.target.value;
+                      const match = findBankByName(name);
+                      setValue("additionalDetails.bankName", name, {
+                        shouldValidate: true,
+                      });
+                      setValue("additionalDetails.bankCode", match?.code ?? "", {
+                        shouldValidate: true,
+                      });
+                    },
+                  })}
+                  options={bankOptions}
+                  error={errors.additionalDetails?.bankName?.message}
+                />
+                <input type="hidden" {...register("additionalDetails.bankCode")} />
               </div>
               <div className="space-y-2">
-                <Label>Branch Name</Label>
-                <Input {...register("additionalDetails.bankBranchName")} error={errors.additionalDetails?.bankBranchName?.message} />
+                <Label required>Branch Name</Label>
+                <Input
+                  {...register("additionalDetails.bankBranchName")}
+                  error={errors.additionalDetails?.bankBranchName?.message}
+                />
               </div>
               <div className="space-y-2">
-                <Label>Account Holder Name</Label>
-                <Input {...register("additionalDetails.accountHolderName")} error={errors.additionalDetails?.accountHolderName?.message} />
+                <Label required>Account Holder Name</Label>
+                <Input
+                  {...register("additionalDetails.accountHolderName")}
+                  error={errors.additionalDetails?.accountHolderName?.message}
+                />
               </div>
               <div className="space-y-2">
-                <Label>Account Number</Label>
-                <Input {...register("additionalDetails.accountNumber")} error={errors.additionalDetails?.accountNumber?.message} />
+                <Label required>Account Number</Label>
+                <Input
+                  {...register("additionalDetails.accountNumber")}
+                  error={errors.additionalDetails?.accountNumber?.message}
+                />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label>IFSC Code</Label>
+                <Label required>IFSC Code</Label>
                 <Input
                   {...register("additionalDetails.ifscCode")}
                   className="uppercase"

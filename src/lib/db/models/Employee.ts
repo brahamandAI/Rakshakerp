@@ -55,6 +55,14 @@ export interface IEmployee extends Document {
     decidedBy: mongoose.Types.ObjectId;
     decidedAt: Date;
   };
+  scanningDecision?: {
+    action: "APPROVE";
+    scanningCompleted: boolean;
+    comment?: string;
+    decidedBy: mongoose.Types.ObjectId;
+    decidedAt: Date;
+  };
+  scanningCompletedAt?: Date;
   forwardedToSupportAt?: Date;
   forwardedToAdminAt?: Date;
   lastSavedAt?: Date;
@@ -147,6 +155,14 @@ const EmployeeSchema = new Schema<IEmployee>(
       decidedBy: { type: Schema.Types.ObjectId, ref: "User" },
       decidedAt: { type: Date },
     },
+    scanningDecision: {
+      action: { type: String, enum: ["APPROVE"] },
+      scanningCompleted: { type: Boolean },
+      comment: { type: String },
+      decidedBy: { type: Schema.Types.ObjectId, ref: "User" },
+      decidedAt: { type: Date },
+    },
+    scanningCompletedAt: { type: Date },
     forwardedToSupportAt: { type: Date },
     forwardedToAdminAt: { type: Date },
     lastSavedAt: { type: Date },

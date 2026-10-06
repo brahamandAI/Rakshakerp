@@ -1,8 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { authConfig } from "@/lib/auth/auth.config";
-import { connectDB } from "@/lib/db/connect";
-import { User } from "@/lib/db/models/User";
+import { prisma } from "@/lib/db/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { isStaffRole } from "@/lib/auth/permissions";
 import {
@@ -28,9 +27,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(credentials.email).toLowerCase().trim();
         const password = String(credentials.password);
 
-        await connectDB();
-
-        const user = await User.findOne({ email });
+        const user = await prisma.user.findUnique({
+          where: { email },
+        });
 
         if (!user || !user.isActive) {
           return null;
@@ -47,26 +46,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const isValid = await verifyPassword(password, user.passwordHash);
 
         if (!isValid) {
-          user.failedLoginAttempts += 1;
+          const failedLoginAttempts = user.failedLoginAttempts + 1;
+          const lockAccount = failedLoginAttempts >= MAX_LOGIN_ATTEMPTS;
 
-          if (user.failedLoginAttempts >= MAX_LOGIN_ATTEMPTS) {
-            user.lockedUntil = new Date(
-              Date.now() + ACCOUNT_LOCK_MINUTES * 60 * 1000
-            );
-            user.failedLoginAttempts = 0;
-          }
-
-          await user.save();
+          await prisma.user.update({
+            where: { id: user.id },
+            data: lockAccount
+              ? {
+                  failedLoginAttempts: 0,
+                  lockedUntil: new Date(
+                    Date.now() + ACCOUNT_LOCK_MINUTES * 60 * 1000
+                  ),
+                }
+              : {
+                  failedLoginAttempts,
+                },
+          });
           return null;
         }
 
-        user.failedLoginAttempts = 0;
-        user.lockedUntil = undefined;
-        user.lastLoginAt = new Date();
-        await user.save();
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+            lastLoginAt: new Date(),
+          },
+        });
 
         return {
-          id: user._id.toString(),
+          id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,

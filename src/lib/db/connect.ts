@@ -1,5 +1,11 @@
+/**
+ * Optional MongoDB connection helpers for offline migration / diagnostic scripts.
+ *
+ * Production application runtime does NOT call these.
+ * Prefer Prisma (`@/lib/db/prisma`) for all app data access.
+ */
+
 import mongoose, { Mongoose } from "mongoose";
-import { ONBOARDING_TOTAL_STEPS } from "@/features/onboarding/constants";
 
 interface MongooseCache {
   conn: Mongoose | null;
@@ -20,23 +26,6 @@ if (!global.mongooseCache) {
   global.mongooseCache = cached;
 }
 
-let repairedLegacySteps = false;
-
-async function repairLegacyOnboardingSteps(instance: Mongoose) {
-  if (repairedLegacySteps) return;
-  const db = instance.connection.db;
-  if (!db) return;
-  repairedLegacySteps = true;
-  try {
-    await db.collection("employees").updateMany(
-      { currentStep: { $gt: ONBOARDING_TOTAL_STEPS } },
-      { $set: { currentStep: ONBOARDING_TOTAL_STEPS } }
-    );
-  } catch {
-    repairedLegacySteps = false;
-  }
-}
-
 const connectionOptions: mongoose.ConnectOptions = {
   bufferCommands: false,
   maxPoolSize: 10,
@@ -53,7 +42,7 @@ function getMongoUri(): string {
   const uri = process.env.MONGODB_URI?.trim();
   if (!uri) {
     throw new Error(
-      "MONGODB_URI is not set. Copy .env.example to .env.local and add your MongoDB connection string."
+      "MONGODB_URI is not set. Required only for offline Mongo migration/diagnostic scripts."
     );
   }
   return uri;
@@ -84,17 +73,18 @@ async function connectWithRetry(uri: string, attempts = 3): Promise<Mongoose> {
     }
   }
 
-  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  const message =
+    lastError instanceof Error ? lastError.message : String(lastError);
   throw new Error(
     `MongoDB connection failed: ${message}. In Atlas go to Network Access and add your current public IP (run: npm run db:ip).`
   );
 }
 
+/** Offline / migration helper — not used by production request handlers. */
 export async function connectDB(): Promise<Mongoose> {
   const uri = getMongoUri();
 
   if (cached.conn && isConnectionReady(cached.conn)) {
-    await repairLegacyOnboardingSteps(cached.conn);
     return cached.conn;
   }
 
@@ -111,11 +101,15 @@ export async function connectDB(): Promise<Mongoose> {
   }
 
   cached.conn = await cached.promise;
-  await repairLegacyOnboardingSteps(cached.conn);
   return cached.conn;
 }
 
-export async function pingDB(): Promise<{ ok: boolean; database?: string; error?: string }> {
+/** Offline / migration helper — not used by production health checks. */
+export async function pingDB(): Promise<{
+  ok: boolean;
+  database?: string;
+  error?: string;
+}> {
   try {
     const conn = await connectDB();
     await conn.connection.db?.admin().ping();

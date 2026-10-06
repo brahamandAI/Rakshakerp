@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/features/l1/components/StatusBadge";
 import { L2ActionPanel } from "@/features/l2/components/L2ActionPanel";
+import { ScanningActionPanel } from "@/features/scanning/components/ScanningActionPanel";
 import { FieldChangesPanel } from "@/features/approval/components/FieldChangesPanel";
 import { EmployeeDocumentsFolderPanel } from "@/features/documents/components/EmployeeDocumentsFolderPanel";
 import {
@@ -27,6 +28,11 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DownloadExcelButton } from "@/features/export/components/DownloadExcelButton";
+import {
+  flattenDisplayEntries,
+  formatDisplayValue,
+  humanizeKey,
+} from "@/lib/utils/display-value";
 
 interface HistoryItem {
   action: string;
@@ -68,6 +74,13 @@ interface EmployeeDetailViewProps {
       decidedAt?: string;
       decidedBy?: { name?: string; email?: string } | null;
     };
+    scanningDecision?: {
+      action: string;
+      comment?: string;
+      decidedAt?: string;
+      decidedBy?: { name?: string; email?: string } | null;
+    };
+    scanningCompletedAt?: string;
     submittedAt?: string;
     submittedBy?: { name?: string; email?: string } | null;
     correctionNotes?: string;
@@ -83,6 +96,8 @@ interface EmployeeDetailViewProps {
   };
   documents: PreviewDocument[];
   history: HistoryItem[];
+  /** Defaults to L2 review; use "scanning" for Scanning staff. */
+  reviewMode?: "l2" | "scanning";
 }
 
 /** Cards are skipped entirely when a section has nothing to show. */
@@ -122,9 +137,7 @@ function DetailSection({
 }
 
 function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
-  const entries = Object.entries(data).filter(
-    ([, v]) => v !== undefined && v !== null && v !== ""
-  );
+  const entries = flattenDisplayEntries(data);
 
   if (entries.length === 0) {
     return null;
@@ -135,14 +148,10 @@ function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
       {entries.map(([key, value]) => (
         <div key={key}>
           <dt className="text-xs font-medium uppercase tracking-wide text-[#64748B]">
-            {key.replace(/([A-Z])/g, " $1").trim()}
+            {humanizeKey(key)}
           </dt>
           <dd className="mt-0.5 text-sm text-primary">
-            {typeof value === "boolean"
-              ? value
-                ? "Yes"
-                : "No"
-              : String(value)}
+            {formatDisplayValue(value)}
           </dd>
         </div>
       ))}
@@ -154,10 +163,14 @@ export function EmployeeDetailView({
   employee,
   documents,
   history,
+  reviewMode = "l2",
 }: EmployeeDetailViewProps) {
   const personal = employee.personalDetails ?? {};
   const fullName = (personal.fullName as string) ?? "Unknown";
   const [status, setStatus] = useState(employee.status);
+  const isScanning = reviewMode === "scanning";
+  const exportScope = isScanning ? "scanning" : "l2";
+  const reviewAnchor = isScanning ? "scanning-review" : "l2-review";
 
   useEffect(() => {
     setStatus(employee.status);
@@ -231,7 +244,7 @@ export function EmployeeDetailView({
             <div className="mt-3 flex flex-wrap gap-2">
               {[
                 { id: "l2-documents", label: "Documents" },
-                { id: "l2-review", label: "Review" },
+                { id: reviewAnchor, label: "Review" },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -249,7 +262,7 @@ export function EmployeeDetailView({
 
       <div className="flex justify-end">
         <DownloadExcelButton
-          scope="l2"
+          scope={exportScope}
           employeeId={employee._id}
           label="Download Excel"
         />
@@ -283,6 +296,40 @@ export function EmployeeDetailView({
               ? ` — ${new Date(employee.l1Decision.decidedAt).toLocaleString("en-IN")}`
               : ""}
             {employee.l1Decision.comment && ` — ${employee.l1Decision.comment}`}
+          </p>
+        </div>
+      )}
+
+      {employee.l2Decision && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3">
+          <p className="text-sm font-medium text-sky-900">
+            {employee.l2Decision.action === "APPROVE" ||
+            employee.l2Decision.action === "FORWARD"
+              ? "L2 Approved by"
+              : "L2 Decision"}
+          </p>
+          <p className="mt-1 text-sm text-sky-800">
+            {employee.l2Decision.decidedBy?.name || employee.l2Decision.action}
+            {employee.l2Decision.decidedAt
+              ? ` — ${new Date(employee.l2Decision.decidedAt).toLocaleString("en-IN")}`
+              : ""}
+            {employee.l2Decision.comment && ` — ${employee.l2Decision.comment}`}
+          </p>
+        </div>
+      )}
+
+      {employee.scanningDecision && (
+        <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3">
+          <p className="text-sm font-medium text-cyan-900">Scanning Completed by</p>
+          <p className="mt-1 text-sm text-cyan-800">
+            {employee.scanningDecision.decidedBy?.name || "Scanning"}
+            {employee.scanningCompletedAt || employee.scanningDecision.decidedAt
+              ? ` — ${new Date(
+                  employee.scanningCompletedAt ?? employee.scanningDecision.decidedAt!
+                ).toLocaleString("en-IN")}`
+              : ""}
+            {employee.scanningDecision.comment &&
+              ` — ${employee.scanningDecision.comment}`}
           </p>
         </div>
       )}
@@ -390,6 +437,7 @@ export function EmployeeDetailView({
         [
           EmployeeStatus.APPROVED,
           EmployeeStatus.ID_GENERATED,
+          EmployeeStatus.SCANNING_COMPLETED,
           EmployeeStatus.ID_CARD_ISSUED,
         ].includes(status)) && (
         <EmployeeDocumentsFolderPanel
@@ -399,27 +447,38 @@ export function EmployeeDetailView({
       )}
 
       <section
-        id="l2-review"
+        id={reviewAnchor}
         className="mt-2 scroll-mt-24 space-y-3 rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm sm:p-6"
       >
         <div>
           <h3 className="font-heading text-lg font-semibold text-primary">
-            Review Decision
+            {isScanning ? "Scanning Decision" : "Review Decision"}
           </h3>
           <p className="text-sm text-[#64748B]">
-            Review all employee details and documents above, then take action below.
+            {isScanning
+              ? "Review previous approvals and registration details, then confirm scanning is complete."
+              : "Review all employee details and documents above, then take action below."}
           </p>
         </div>
-        <L2ActionPanel
-          employeeId={employee._id}
-          status={status}
-          employeeIdCode={employee.temporaryEmployeeId ?? employee.employeeId}
-          l1DecisionAction={employee.l1Decision?.action}
-          l2DecisionAction={employee.l2Decision?.action}
-          forwardedToSupportAt={employee.forwardedToSupportAt}
-          forwardedToAdminAt={employee.forwardedToAdminAt}
-          onStatusChange={setStatus}
-        />
+        {isScanning ? (
+          <ScanningActionPanel
+            employeeId={employee._id}
+            status={status}
+            scanningCompletedAt={employee.scanningCompletedAt}
+            onStatusChange={setStatus}
+          />
+        ) : (
+          <L2ActionPanel
+            employeeId={employee._id}
+            status={status}
+            employeeIdCode={employee.temporaryEmployeeId ?? employee.employeeId}
+            l1DecisionAction={employee.l1Decision?.action}
+            l2DecisionAction={employee.l2Decision?.action}
+            forwardedToSupportAt={employee.forwardedToSupportAt}
+            forwardedToAdminAt={employee.forwardedToAdminAt}
+            onStatusChange={setStatus}
+          />
+        )}
       </section>
     </div>
   );

@@ -15,6 +15,11 @@ import { EmployeeStatus } from "@/types/enums";
 import { Pencil, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { DownloadExcelButton } from "@/features/export/components/DownloadExcelButton";
+import {
+  flattenDisplayEntries,
+  formatDisplayValue,
+  humanizeKey,
+} from "@/lib/utils/display-value";
 
 interface HistoryItem {
   action: string;
@@ -97,9 +102,7 @@ function DetailSection({
 }
 
 function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
-  const entries = Object.entries(data).filter(
-    ([, v]) => v !== undefined && v !== null && v !== ""
-  );
+  const entries = flattenDisplayEntries(data);
 
   if (entries.length === 0) {
     return null;
@@ -110,14 +113,10 @@ function KeyValueGrid({ data }: { data: Record<string, unknown> }) {
       {entries.map(([key, value]) => (
         <div key={key}>
           <dt className="text-xs font-medium uppercase tracking-wide text-[#64748B]">
-            {key.replace(/([A-Z])/g, " $1").trim()}
+            {humanizeKey(key)}
           </dt>
           <dd className="mt-0.5 text-sm text-primary">
-            {typeof value === "boolean"
-              ? value
-                ? "Yes"
-                : "No"
-              : String(value)}
+            {formatDisplayValue(value)}
           </dd>
         </div>
       ))}

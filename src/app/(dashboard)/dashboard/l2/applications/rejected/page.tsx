@@ -23,6 +23,7 @@ export default async function L2RejectedApplicationsPage() {
         applications={applications}
         viewPathPrefix="/dashboard/l2/applications"
         emptyMessage="No reversed applications."
+        exportScope="l2"
       />
     </div>
   );

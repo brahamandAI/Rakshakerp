@@ -21,9 +21,11 @@ export default async function DashboardLayout({
         ? "/dashboard/l1"
         : user.role === UserRole.L2
           ? "/dashboard/l2"
-          : user.role === UserRole.ADMIN
-            ? "/dashboard/admin"
-            : "/dashboard/support";
+          : user.role === UserRole.SCANNING
+            ? "/dashboard/scanning"
+            : user.role === UserRole.ADMIN
+              ? "/dashboard/admin"
+              : "/dashboard/support";
 
   return (
     <DashboardFrame

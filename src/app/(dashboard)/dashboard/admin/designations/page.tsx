@@ -17,8 +17,19 @@ export default async function AdminDesignationsPage() {
     _id: String(d._id),
     name: d.name,
     code: d.code,
-    departmentId: d.departmentId ? String(d.departmentId) : undefined,
-    level: d.level,
+    departmentId:
+      d.departmentId &&
+      typeof d.departmentId === "object" &&
+      d.departmentId !== null &&
+      "_id" in d.departmentId
+        ? {
+            _id: String(d.departmentId._id),
+            name: String(d.departmentId.name),
+          }
+        : typeof d.departmentId === "string"
+          ? d.departmentId
+          : undefined,
+    level: d.level ?? undefined,
     isActive: d.isActive,
   }));
 

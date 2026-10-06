@@ -71,13 +71,6 @@ export const personalDetailsSchema = z
         path: ["gender"],
       });
     }
-    if (data.maritalStatus === "MARRIED" && !data.spouseOrNok?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Spouse name is required when marital status is Married",
-        path: ["spouseOrNok"],
-      });
-    }
   });
 
 export const addressSchema = z
@@ -124,17 +117,17 @@ export const employmentPreferencesSchema = z.object({
     esicNumber: z.string().optional(),
     esiApplicable: optionalYesNo,
     pfApplicable: optionalYesNo,
-    pfNumber: z.string().optional(),
     ptApplicable: optionalYesNo,
-    bankName: z.string().optional(),
-    bankBranchName: z.string().optional(),
-    accountHolderName: z.string().optional(),
-    accountNumber: z.string().optional(),
-    ifscCode: z
+    bankName: z.string().min(1, "Bank name is required"),
+    bankCode: z.string().optional(),
+    bankBranchName: z.string().min(1, "Branch name is required"),
+    accountHolderName: z.string().min(1, "Account holder name is required"),
+    accountNumber: z
       .string()
-      .regex(ifscRegex, "Enter valid IFSC code")
-      .or(z.literal(""))
-      .optional(),
+      .min(9, "Enter a valid account number")
+      .max(18, "Enter a valid account number")
+      .regex(/^\d+$/, "Account number must be digits only"),
+    ifscCode: z.string().regex(ifscRegex, "Enter valid IFSC code"),
   }),
 });
 

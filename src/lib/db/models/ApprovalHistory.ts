@@ -12,7 +12,8 @@ export type ApprovalAction =
   | "L2_FORWARD"
   | "L2_FORWARD_ADMIN"
   | "RESUBMIT"
-  | "GENERATE_ID";
+  | "GENERATE_ID"
+  | "SCANNING_COMPLETE";
 
 export interface IApprovalHistory extends Document {
   _id: mongoose.Types.ObjectId;

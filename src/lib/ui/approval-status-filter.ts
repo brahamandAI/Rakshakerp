@@ -37,8 +37,19 @@ export const APPROVAL_STATUS_FILTERS: Array<{
     statuses: [
       EmployeeStatus.APPROVED,
       EmployeeStatus.ID_GENERATED,
+      EmployeeStatus.SCANNING_COMPLETED,
       EmployeeStatus.ID_CARD_ISSUED,
     ],
+  },
+  {
+    value: "scanning_pending",
+    label: "Pending Scanning",
+    statuses: [EmployeeStatus.ID_GENERATED],
+  },
+  {
+    value: "scanning_completed",
+    label: REGISTRATION_STATUS_LABELS[EmployeeStatus.SCANNING_COMPLETED],
+    statuses: [EmployeeStatus.SCANNING_COMPLETED],
   },
   {
     value: "rejected",

@@ -29,6 +29,7 @@ const STAGES: Stage[] = [
         EmployeeStatus.L2_RETURNED,
         EmployeeStatus.APPROVED,
         EmployeeStatus.ID_GENERATED,
+        EmployeeStatus.SCANNING_COMPLETED,
         EmployeeStatus.ID_CARD_ISSUED,
       ].includes(s),
     isCurrent: (s) =>
@@ -43,6 +44,7 @@ const STAGES: Stage[] = [
       [
         EmployeeStatus.APPROVED,
         EmployeeStatus.ID_GENERATED,
+        EmployeeStatus.SCANNING_COMPLETED,
         EmployeeStatus.ID_CARD_ISSUED,
       ].includes(s),
     isCurrent: (s) =>
@@ -52,14 +54,25 @@ const STAGES: Stage[] = [
     key: "tempId",
     label: "Temp ID",
     isDone: (s) =>
-      [EmployeeStatus.ID_GENERATED, EmployeeStatus.ID_CARD_ISSUED].includes(s),
+      [
+        EmployeeStatus.ID_GENERATED,
+        EmployeeStatus.SCANNING_COMPLETED,
+        EmployeeStatus.ID_CARD_ISSUED,
+      ].includes(s),
     isCurrent: (s) => s === EmployeeStatus.APPROVED,
+  },
+  {
+    key: "scanning",
+    label: "Scan",
+    isDone: (s) =>
+      [EmployeeStatus.SCANNING_COMPLETED, EmployeeStatus.ID_CARD_ISSUED].includes(s),
+    isCurrent: (s) => s === EmployeeStatus.ID_GENERATED,
   },
   {
     key: "done",
     label: "Complete",
     isDone: (s) => s === EmployeeStatus.ID_CARD_ISSUED,
-    isCurrent: (s) => s === EmployeeStatus.ID_GENERATED,
+    isCurrent: (s) => s === EmployeeStatus.SCANNING_COMPLETED,
   },
 ];
 

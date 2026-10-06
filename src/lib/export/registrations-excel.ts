@@ -1,5 +1,10 @@
 /** Payroll Sampleempdetails.xlsx-compatible Excel export (SpreadsheetML .xls). */
 
+import {
+  resolveBankCode,
+  resolveDesignationCode,
+} from "@/features/onboarding/masters/payroll-codes";
+
 export type RegistrationExportSource = {
   applicationRef?: string;
   status?: string;
@@ -197,7 +202,10 @@ const COLUMNS: Col[] = [
     key: "Designation",
     header: "Designation",
     get: (r) =>
-      r.personalDetails?.designationCode || r.personalDetails?.postAppliedFor,
+      resolveDesignationCode(
+        r.personalDetails?.designationCode,
+        r.personalDetails?.postAppliedFor
+      ),
   },
   {
     key: "Mobile No",
@@ -362,7 +370,11 @@ const COLUMNS: Col[] = [
   {
     key: "Bank Name",
     header: "Bank Name",
-    get: (r) => r.additionalDetails?.bankName,
+    get: (r) =>
+      resolveBankCode(
+        r.additionalDetails?.bankCode,
+        r.additionalDetails?.bankName
+      ),
   },
   {
     key: "Date of Joining",
@@ -394,17 +406,8 @@ const COLUMNS: Col[] = [
     get: (r) =>
       yesNo(
         r.additionalDetails?.pfApplicable,
-        str(r.additionalDetails?.uanNo) || str(r.additionalDetails?.pfNumber)
-          ? "YES"
-          : ""
+        str(r.additionalDetails?.uanNo) ? "YES" : ""
       ),
-  },
-  {
-    key: "PF No",
-    header: "PF No",
-    get: (r) =>
-      str(r.additionalDetails?.pfNumber) ||
-      digitsOnly(r.additionalDetails?.uanNo),
   },
   {
     key: "PT Applicable",

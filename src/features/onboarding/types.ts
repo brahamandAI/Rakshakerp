@@ -140,9 +140,10 @@ export interface AdditionalDetails {
   esicNumber?: string;
   esiApplicable?: string;
   pfApplicable?: string;
-  pfNumber?: string;
   ptApplicable?: string;
   bankName?: string;
+  /** Payroll bank code — exported in Excel instead of bank name */
+  bankCode?: string;
   bankBranchName?: string;
   accountHolderName?: string;
   accountNumber?: string;

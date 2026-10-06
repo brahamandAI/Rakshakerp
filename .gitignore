@@ -42,3 +42,18 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+/src/generated/prisma
+
+# local DB checkpoints (may contain PII)
+/backups
+
+
+
+
+
+
+
+
+
+

@@ -1,14 +1,15 @@
-import mongoose from "mongoose";
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
-import { User } from "@/lib/db/models/User";
-import { ApprovalHistory } from "@/lib/db/models/ApprovalHistory";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
+import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@/generated/prisma/client";
+import { newObjectIdString } from "@/lib/db/ids";
 import { EmployeeStatus, UserRole } from "@/types/enums";
+import { generateTemporaryEmployeeId } from "@/lib/services/employee-id.service";
 import {
-  generateTemporaryEmployeeId,
-} from "@/lib/services/employee-id.service";
-import { isPendingL2Review } from "@/lib/services/approval-queue";
+  asRecord,
+  decisionAction,
+  isLikelyObjectIdString,
+  isPendingL2Review,
+  normalizeId,
+} from "@/lib/services/approval-queue";
 import {
   dispatchApplicationSubmitted,
   dispatchL1Approved,
@@ -31,7 +32,7 @@ export class ApprovalError extends Error {
 
 function isTransientDbError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /timed out|timeout|ECONNRESET|ENOTFOUND|MongoNetwork|MongoServerSelection|connection/i.test(
+  return /timed out|timeout|ECONNRESET|ENOTFOUND|MongoNetwork|MongoServerSelection|connection|Prisma|postgres/i.test(
     message
   );
 }
@@ -41,7 +42,6 @@ async function retryOnce<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (error) {
     if (!isTransientDbError(error)) throw error;
-    await connectDB();
     return fn();
   }
 }
@@ -67,23 +67,33 @@ export function describeApprovalFailure(error: unknown, fallback: string): strin
   return fallback;
 }
 
+function asInputJson(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
 async function recordHistory(params: {
-  employeeId: mongoose.Types.ObjectId;
+  employeeId: string;
   fromStatus: string;
   toStatus: string;
   action: string;
   performedBy: string;
   performedByRole: string;
   comment?: string;
+  createdAt?: Date;
 }) {
-  await ApprovalHistory.create({
-    employeeId: params.employeeId,
-    fromStatus: params.fromStatus,
-    toStatus: params.toStatus,
-    action: params.action,
-    performedBy: new mongoose.Types.ObjectId(params.performedBy),
-    performedByRole: params.performedByRole,
-    comment: params.comment,
+  const createdAt = params.createdAt ?? new Date();
+  await prisma.approvalHistory.create({
+    data: {
+      id: newObjectIdString(),
+      employeeId: params.employeeId,
+      fromStatus: params.fromStatus,
+      toStatus: params.toStatus,
+      action: params.action,
+      performedBy: params.performedBy,
+      performedByRole: params.performedByRole,
+      comment: params.comment,
+      createdAt,
+    },
   });
 }
 
@@ -91,43 +101,72 @@ export async function assignL1OnSubmit(
   employeeId: string,
   options?: { performedBy?: string; isResubmit?: boolean }
 ): Promise<void> {
-  await connectDB();
-  const l1User = await User.findOne({ role: UserRole.L1, isActive: true }).sort({
-    createdAt: 1,
+  const l1User = await prisma.user.findFirst({
+    where: { role: UserRole.L1, isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
   });
 
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) return;
 
   const fromStatus = employee.status;
-  employee.status = EmployeeStatus.L1_REVIEW;
-  if (l1User) {
-    employee.assignedL1Id = l1User._id;
-  }
-  await employee.save();
+  const assignedL1Id = l1User?.id ?? null;
+  const now = new Date();
 
   const performer =
-    options?.performedBy ||
-    employee.submittedBy?.toString() ||
-    l1User?._id.toString();
+    options?.performedBy || employee.submittedBy || l1User?.id || undefined;
 
   if (performer) {
-    await recordHistory({
-      employeeId: employee._id,
-      fromStatus,
-      toStatus: EmployeeStatus.L1_REVIEW,
-      action: options?.isResubmit ? "RESUBMIT" : "SUBMIT",
-      performedBy: performer,
-      performedByRole: UserRole.SUBMITTER,
-      comment: options?.isResubmit
-        ? "Registration updated and resubmitted"
-        : "Registration submitted for L1 approval",
+    await prisma.$transaction([
+      prisma.employee.update({
+        where: { id: employeeId },
+        data: {
+          status: EmployeeStatus.L1_REVIEW,
+          assignedL1Id,
+          updatedAt: now,
+        },
+      }),
+      prisma.approvalHistory.create({
+        data: {
+          id: newObjectIdString(),
+          employeeId,
+          fromStatus,
+          toStatus: EmployeeStatus.L1_REVIEW,
+          action: options?.isResubmit ? "RESUBMIT" : "SUBMIT",
+          performedBy: performer,
+          performedByRole: UserRole.SUBMITTER,
+          comment: options?.isResubmit
+            ? "Registration updated and resubmitted"
+            : "Registration submitted for L1 approval",
+          createdAt: now,
+        },
+      }),
+    ]);
+  } else {
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.L1_REVIEW,
+        assignedL1Id,
+        updatedAt: now,
+      },
     });
   }
 
+  // Notifications remain MongoDB / fire-and-forget (Phase 7)
   void dispatchApplicationSubmitted(
-    employeeNotifyContext(employee),
-    l1User?._id.toString()
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    }),
+    l1User?.id
   ).catch(() => undefined);
 }
 
@@ -141,56 +180,63 @@ export async function performL1Approve(
   if (trimmedName.length < 2) {
     throw new ApprovalError("Enter the L1 name in Approved by", "VALIDATION");
   }
-  if (!mongoose.isValidObjectId(employeeId)) {
+  if (!isLikelyObjectIdString(employeeId)) {
     throw new ApprovalError("Application not found", "NOT_FOUND");
   }
-  if (!mongoose.isValidObjectId(reviewerId)) {
+  if (!isLikelyObjectIdString(reviewerId)) {
     throw new ApprovalError("Please sign in again to approve", "AUTH");
   }
 
-  await connectDB();
-
   const now = new Date();
+  const l1Decision = {
+    action: "APPROVE" as const,
+    comment,
+    approvedByName: trimmedName,
+    decidedBy: reviewerId,
+    decidedAt: now.toISOString(),
+  };
+
   const updated = await retryOnce(() =>
-    Employee.findOneAndUpdate(
-      {
-        _id: employeeId,
-        status: { $in: [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW] },
-      },
-      {
-        $set: {
-          status: EmployeeStatus.L2_REVIEW,
-          l1Decision: {
-            action: "APPROVE",
-            comment,
-            approvedByName: trimmedName,
-            decidedBy: new mongoose.Types.ObjectId(reviewerId),
-            decidedAt: now,
-          },
-          l1ApprovedAt: now,
+    prisma.employee.updateMany({
+      where: {
+        id: employeeId,
+        status: {
+          in: [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW],
         },
-        $unset: { correctionNotes: "", l2Decision: "" },
       },
-      { new: true }
-    )
+      data: {
+        status: EmployeeStatus.L2_REVIEW,
+        l1Decision: asInputJson(l1Decision),
+        l1ApprovedAt: now,
+        correctionNotes: null,
+        l2Decision: Prisma.DbNull,
+        updatedAt: now,
+      },
+    })
   );
 
-  if (!updated) {
-    const existing = await Employee.findById(employeeId)
-      .select("status l1Decision")
-      .lean();
+  if (updated.count === 0) {
+    const existing = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { status: true, l1Decision: true },
+    });
     if (!existing) throw new ApprovalError("Application not found", "NOT_FOUND");
     if (
       existing.status === EmployeeStatus.L2_REVIEW &&
-      existing.l1Decision?.action === "APPROVE"
+      decisionAction(existing.l1Decision) === "APPROVE"
     ) {
       return {};
     }
     throw new ApprovalError("Application is not in L1 review", "INVALID_STATUS");
   }
 
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
+  if (!employee) return {};
+
   void recordHistory({
-    employeeId: updated._id,
+    employeeId,
     fromStatus: EmployeeStatus.L1_REVIEW,
     toStatus: EmployeeStatus.L2_REVIEW,
     action: "L1_APPROVE",
@@ -201,7 +247,16 @@ export async function performL1Approve(
       .join(" — "),
   }).catch((error) => console.error("[l1-approve] history", error));
 
-  void dispatchL1Approved(employeeNotifyContext(updated)).catch(() => undefined);
+  void dispatchL1Approved(
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    })
+  ).catch(() => undefined);
 
   return {};
 }
@@ -218,39 +273,62 @@ export async function performL1Reject(
     );
   }
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
   const allowed = [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW];
-  if (!allowed.includes(employee.status)) {
+  if (!allowed.includes(employee.status as EmployeeStatus)) {
     throw new ApprovalError("Application is not in L1 review", "INVALID_STATUS");
   }
 
   const fromStatus = employee.status;
-  employee.status = EmployeeStatus.REJECTED;
-  employee.rejectionReason = comment;
-  employee.l1Decision = {
-    action: "REJECT",
+  const now = new Date();
+  const l1Decision = {
+    action: "REJECT" as const,
     comment,
-    decidedBy: new mongoose.Types.ObjectId(reviewerId),
-    decidedAt: new Date(),
+    decidedBy: reviewerId,
+    decidedAt: now.toISOString(),
   };
-  await employee.save();
 
-  await recordHistory({
-    employeeId: employee._id,
-    fromStatus,
-    toStatus: EmployeeStatus.REJECTED,
-    action: "L1_REJECT",
-    performedBy: reviewerId,
-    performedByRole: UserRole.L1,
-    comment,
-  });
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.REJECTED,
+        rejectionReason: comment,
+        l1Decision: asInputJson(l1Decision),
+        updatedAt: now,
+      },
+    }),
+    prisma.approvalHistory.create({
+      data: {
+        id: newObjectIdString(),
+        employeeId,
+        fromStatus,
+        toStatus: EmployeeStatus.REJECTED,
+        action: "L1_REJECT",
+        performedBy: reviewerId,
+        performedByRole: UserRole.L1,
+        comment,
+        createdAt: now,
+      },
+    }),
+  ]);
 
-  void dispatchRejected(employeeNotifyContext(employee), "L1", comment).catch(
-    () => undefined
-  );
+  void dispatchRejected(
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    }),
+    "L1",
+    comment
+  ).catch(() => undefined);
 }
 
 export async function performL1Return(
@@ -265,74 +343,220 @@ export async function performL1Return(
     );
   }
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
   const allowed = [EmployeeStatus.SUBMITTED, EmployeeStatus.L1_REVIEW];
-  if (!allowed.includes(employee.status)) {
+  if (!allowed.includes(employee.status as EmployeeStatus)) {
     throw new ApprovalError("Application is not in L1 review", "INVALID_STATUS");
   }
 
   const fromStatus = employee.status;
-  employee.status = EmployeeStatus.L1_RETURNED;
-  employee.correctionNotes = comment;
-  employee.l1Decision = {
-    action: "RETURN",
+  const now = new Date();
+  const l1Decision = {
+    action: "RETURN" as const,
     comment,
-    decidedBy: new mongoose.Types.ObjectId(reviewerId),
-    decidedAt: new Date(),
+    decidedBy: reviewerId,
+    decidedAt: now.toISOString(),
   };
-  await employee.save();
 
-  await recordHistory({
-    employeeId: employee._id,
-    fromStatus,
-    toStatus: EmployeeStatus.L1_RETURNED,
-    action: "L1_RETURN",
-    performedBy: reviewerId,
-    performedByRole: UserRole.L1,
-    comment,
-  });
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.L1_RETURNED,
+        correctionNotes: comment,
+        l1Decision: asInputJson(l1Decision),
+        updatedAt: now,
+      },
+    }),
+    prisma.approvalHistory.create({
+      data: {
+        id: newObjectIdString(),
+        employeeId,
+        fromStatus,
+        toStatus: EmployeeStatus.L1_RETURNED,
+        action: "L1_RETURN",
+        performedBy: reviewerId,
+        performedByRole: UserRole.L1,
+        comment,
+        createdAt: now,
+      },
+    }),
+  ]);
 
-  void dispatchCorrectionRequired(employeeNotifyContext(employee), "L1", comment).catch(
-    () => undefined
-  );
+  void dispatchCorrectionRequired(
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    }),
+    "L1",
+    comment
+  ).catch(() => undefined);
 }
 
 export async function getEmployeeDetailForReview(employeeId: string) {
-  await connectDB();
   const [employee, documents, history] = await Promise.all([
-    Employee.findById(employeeId)
-      .populate("submittedBy", "name email")
-      .populate("l1Decision.decidedBy", "name email")
-      .populate("l2Decision.decidedBy", "name email")
-      .lean(),
-    EmployeeDocument.find({
-      employeeId,
-      isActive: true,
-    }).lean(),
-    ApprovalHistory.find({ employeeId })
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .populate("performedBy", "name")
-      .lean(),
+    prisma.employee.findUnique({ where: { id: employeeId } }),
+    prisma.employeeDocument.findMany({
+      where: { employeeId, isActive: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.approvalHistory.findMany({
+      where: { employeeId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: {
+        performer: { select: { name: true } },
+      },
+    }),
   ]);
 
   if (!employee) return null;
 
-  return { employee, documents, history };
+  const userIds = new Set<string>();
+  if (employee.submittedBy) userIds.add(employee.submittedBy);
+  for (const key of ["l1Decision", "l2Decision", "scanningDecision"] as const) {
+    const id = normalizeId(asRecord(employee[key])?.decidedBy);
+    if (id) userIds.add(id);
+  }
+
+  const users =
+    userIds.size > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: [...userIds] } },
+          select: { id: true, name: true, email: true },
+        })
+      : [];
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  function withDecidedBy(decision: unknown) {
+    const rec = asRecord(decision);
+    if (!rec) return decision;
+    const decidedById = normalizeId(rec.decidedBy);
+    const user = decidedById ? userMap.get(decidedById) : undefined;
+    return {
+      ...rec,
+      decidedBy: user
+        ? { name: user.name, email: user.email }
+        : rec.decidedBy && typeof rec.decidedBy === "object"
+          ? rec.decidedBy
+          : decidedById
+            ? { name: undefined, email: undefined }
+            : null,
+    };
+  }
+
+  const submittedByUser = employee.submittedBy
+    ? userMap.get(employee.submittedBy)
+    : undefined;
+
+  const shapedEmployee = {
+    _id: employee.id,
+    applicationRef: employee.applicationRef,
+    status: employee.status as EmployeeStatus,
+    email: employee.email,
+    phone: employee.phone,
+    employeeId: employee.employeeId ?? undefined,
+    temporaryEmployeeId: employee.temporaryEmployeeId ?? undefined,
+    personalDetails: employee.personalDetails,
+    address: employee.address,
+    education: employee.education,
+    references: employee.references,
+    familyDetails: employee.familyDetails,
+    nominee: employee.nominee,
+    exServiceman: employee.exServiceman,
+    gunman: employee.gunman,
+    additionalDetails: employee.additionalDetails,
+    declaration: employee.declaration,
+    submittedAt: employee.submittedAt,
+    submittedBy: submittedByUser
+      ? { name: submittedByUser.name, email: submittedByUser.email }
+      : employee.submittedBy,
+    submittedByName: employee.submittedByName,
+    submittedByEmail: employee.submittedByEmail,
+    l1Decision: withDecidedBy(employee.l1Decision) as {
+      action?: unknown;
+      comment?: unknown;
+      approvedByName?: unknown;
+      decidedAt?: unknown;
+      decidedBy?: unknown;
+    } | null,
+    l2Decision: withDecidedBy(employee.l2Decision) as {
+      action?: unknown;
+      comment?: unknown;
+      approvedByName?: unknown;
+      decidedAt?: unknown;
+      decidedBy?: unknown;
+    } | null,
+    scanningDecision: withDecidedBy(employee.scanningDecision) as {
+      action?: unknown;
+      comment?: unknown;
+      approvedByName?: unknown;
+      decidedAt?: unknown;
+      decidedBy?: unknown;
+    } | null,
+    scanningCompletedAt: employee.scanningCompletedAt,
+    correctionNotes: employee.correctionNotes ?? undefined,
+    rejectionReason: employee.rejectionReason ?? undefined,
+    forwardedToSupportAt: employee.forwardedToSupportAt,
+    forwardedToAdminAt: employee.forwardedToAdminAt,
+    pendingFieldChanges: employee.pendingFieldChanges,
+    documentsFolder: employee.documentsFolder,
+  };
+
+  const shapedDocuments = documents.map((d) => ({
+    _id: d.id,
+    documentType: d.documentType,
+    fileName: d.fileName,
+    mimeType: d.mimeType,
+    sizeBytes: d.sizeBytes,
+    url: d.url,
+    folderLabel: d.folderLabel ?? undefined,
+    folderRelativePath: d.folderRelativePath ?? undefined,
+    version: d.version,
+    createdAt: d.createdAt,
+  }));
+
+  const shapedHistory = history.map((h) => ({
+    action: h.action,
+    fromStatus: h.fromStatus,
+    toStatus: h.toStatus,
+    comment: h.comment ?? undefined,
+    createdAt: h.createdAt,
+    performedBy: h.performer ? { name: h.performer.name } : undefined,
+    performedByRole: h.performedByRole,
+  }));
+
+  return {
+    employee: shapedEmployee,
+    documents: shapedDocuments,
+    history: shapedHistory,
+  };
 }
 
-function assertPendingL2Review(
-  employee: {
-    status: EmployeeStatus;
-    l1Decision?: { action?: string };
-    l2Decision?: { action?: string };
-    forwardedToSupportAt?: Date;
-  }
-) {
-  if (!isPendingL2Review(employee)) {
+function assertPendingL2Review(employee: {
+  status: string;
+  l1Decision?: unknown;
+  l2Decision?: unknown;
+  forwardedToSupportAt?: Date | null;
+  forwardedToAdminAt?: Date | null;
+}) {
+  if (
+    !isPendingL2Review({
+      status: employee.status as EmployeeStatus,
+      l1Decision: asRecord(employee.l1Decision) as { action?: string } | null,
+      l2Decision: asRecord(employee.l2Decision) as { action?: string } | null,
+      forwardedToAdminAt: employee.forwardedToAdminAt,
+      forwardedToSupportAt: employee.forwardedToSupportAt,
+    })
+  ) {
     throw new ApprovalError("Application is not in L2 review", "INVALID_STATUS");
   }
 }
@@ -342,20 +566,21 @@ export async function performL2Approve(
   reviewerId: string,
   comment?: string
 ): Promise<{ employeeIdCode?: string }> {
-  if (!mongoose.isValidObjectId(employeeId)) {
+  if (!isLikelyObjectIdString(employeeId)) {
     throw new ApprovalError("Application not found", "NOT_FOUND");
   }
-  if (!mongoose.isValidObjectId(reviewerId)) {
+  if (!isLikelyObjectIdString(reviewerId)) {
     throw new ApprovalError("Please sign in again to approve", "AUTH");
   }
 
-  await connectDB();
-  const employee = await retryOnce(() => Employee.findById(employeeId));
+  const employee = await retryOnce(() =>
+    prisma.employee.findUnique({ where: { id: employeeId } })
+  );
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
   const alreadyDone =
-    employee.l2Decision?.action === "APPROVE" ||
-    employee.l2Decision?.action === "FORWARD" ||
+    decisionAction(employee.l2Decision) === "APPROVE" ||
+    decisionAction(employee.l2Decision) === "FORWARD" ||
     !!employee.forwardedToAdminAt ||
     !!employee.temporaryEmployeeId;
 
@@ -364,18 +589,27 @@ export async function performL2Approve(
 
     const fromStatus = employee.status;
     const now = new Date();
-    employee.status = EmployeeStatus.APPROVED;
-    employee.l2Decision = {
-      action: "APPROVE",
+    const l2Decision = {
+      action: "APPROVE" as const,
       comment,
-      decidedBy: new mongoose.Types.ObjectId(reviewerId),
-      decidedAt: now,
+      decidedBy: reviewerId,
+      decidedAt: now.toISOString(),
     };
-    employee.approvedAt = now;
-    await retryOnce(() => employee.save());
+
+    await retryOnce(() =>
+      prisma.employee.update({
+        where: { id: employeeId },
+        data: {
+          status: EmployeeStatus.APPROVED,
+          l2Decision: asInputJson(l2Decision),
+          approvedAt: now,
+          updatedAt: now,
+        },
+      })
+    );
 
     void recordHistory({
-      employeeId: employee._id,
+      employeeId,
       fromStatus,
       toStatus: EmployeeStatus.APPROVED,
       action: "L2_APPROVE",
@@ -384,17 +618,26 @@ export async function performL2Approve(
       comment,
     }).catch((error) => console.error("[l2-approve] history", error));
 
-    void dispatchL2Approved(employeeNotifyContext(employee)).catch(() => undefined);
+    void dispatchL2Approved(
+      employeeNotifyContext({
+        _id: employee.id,
+        applicationRef: employee.applicationRef,
+        employeeId: employee.employeeId ?? undefined,
+        personalDetails: (employee.personalDetails ?? undefined) as
+          | Record<string, unknown>
+          | undefined,
+      })
+    ).catch(() => undefined);
   }
 
-  let employeeIdCode = employee.temporaryEmployeeId;
+  let employeeIdCode = employee.temporaryEmployeeId ?? undefined;
 
   try {
     const result = await generateTemporaryEmployeeId(employeeId);
     employeeIdCode = result.employeeIdCode;
 
     void recordHistory({
-      employeeId: employee._id,
+      employeeId,
       fromStatus: EmployeeStatus.APPROVED,
       toStatus: EmployeeStatus.ID_GENERATED,
       action: "GENERATE_ID",
@@ -406,6 +649,7 @@ export async function performL2Approve(
     console.error("[l2-approve] temp ID", error);
   }
 
+  // Document folder organization remains Mongo/deferred (Documents phase)
   void import("@/lib/services/employee-documents-folder.service")
     .then(({ organizeEmployeeDocumentsFolder }) =>
       organizeEmployeeDocumentsFolder(employeeId)
@@ -413,18 +657,17 @@ export async function performL2Approve(
     .catch(() => undefined);
 
   try {
-    await Employee.updateOne(
-      {
-        _id: employeeId,
-        forwardedToAdminAt: { $exists: false },
+    await prisma.employee.updateMany({
+      where: {
+        id: employeeId,
+        forwardedToAdminAt: null,
       },
-      {
-        $set: {
-          forwardedToAdminAt: new Date(),
-          status: EmployeeStatus.ID_GENERATED,
-        },
-      }
-    );
+      data: {
+        forwardedToAdminAt: new Date(),
+        status: EmployeeStatus.ID_GENERATED,
+        updatedAt: new Date(),
+      },
+    });
   } catch (error) {
     console.error("[l2-approve] forward admin", error);
   }
@@ -444,36 +687,59 @@ export async function performL2Reject(
     );
   }
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
   assertPendingL2Review(employee);
 
   const fromStatus = employee.status;
-  employee.status = EmployeeStatus.REJECTED;
-  employee.rejectionReason = comment;
-  employee.l2Decision = {
-    action: "REJECT",
+  const now = new Date();
+  const l2Decision = {
+    action: "REJECT" as const,
     comment,
-    decidedBy: new mongoose.Types.ObjectId(reviewerId),
-    decidedAt: new Date(),
+    decidedBy: reviewerId,
+    decidedAt: now.toISOString(),
   };
-  await employee.save();
 
-  await recordHistory({
-    employeeId: employee._id,
-    fromStatus,
-    toStatus: EmployeeStatus.REJECTED,
-    action: "L2_REJECT",
-    performedBy: reviewerId,
-    performedByRole: UserRole.L2,
-    comment,
-  });
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.REJECTED,
+        rejectionReason: comment,
+        l2Decision: asInputJson(l2Decision),
+        updatedAt: now,
+      },
+    }),
+    prisma.approvalHistory.create({
+      data: {
+        id: newObjectIdString(),
+        employeeId,
+        fromStatus,
+        toStatus: EmployeeStatus.REJECTED,
+        action: "L2_REJECT",
+        performedBy: reviewerId,
+        performedByRole: UserRole.L2,
+        comment,
+        createdAt: now,
+      },
+    }),
+  ]);
 
-  void dispatchRejected(employeeNotifyContext(employee), "L2", comment).catch(
-    () => undefined
-  );
+  void dispatchRejected(
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    }),
+    "L2",
+    comment
+  ).catch(() => undefined);
 }
 
 export async function performL2Return(
@@ -488,36 +754,59 @@ export async function performL2Return(
     );
   }
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
   assertPendingL2Review(employee);
 
   const fromStatus = employee.status;
-  employee.status = EmployeeStatus.L2_RETURNED;
-  employee.correctionNotes = comment;
-  employee.l2Decision = {
-    action: "RETURN",
+  const now = new Date();
+  const l2Decision = {
+    action: "RETURN" as const,
     comment,
-    decidedBy: new mongoose.Types.ObjectId(reviewerId),
-    decidedAt: new Date(),
+    decidedBy: reviewerId,
+    decidedAt: now.toISOString(),
   };
-  await employee.save();
 
-  await recordHistory({
-    employeeId: employee._id,
-    fromStatus,
-    toStatus: EmployeeStatus.L2_RETURNED,
-    action: "L2_RETURN",
-    performedBy: reviewerId,
-    performedByRole: UserRole.L2,
-    comment,
-  });
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.L2_RETURNED,
+        correctionNotes: comment,
+        l2Decision: asInputJson(l2Decision),
+        updatedAt: now,
+      },
+    }),
+    prisma.approvalHistory.create({
+      data: {
+        id: newObjectIdString(),
+        employeeId,
+        fromStatus,
+        toStatus: EmployeeStatus.L2_RETURNED,
+        action: "L2_RETURN",
+        performedBy: reviewerId,
+        performedByRole: UserRole.L2,
+        comment,
+        createdAt: now,
+      },
+    }),
+  ]);
 
-  void dispatchCorrectionRequired(employeeNotifyContext(employee), "L2", comment).catch(
-    () => undefined
-  );
+  void dispatchCorrectionRequired(
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    }),
+    "L2",
+    comment
+  ).catch(() => undefined);
 }
 
 /** L2 sends application back to L1 for re-review with a note. */
@@ -533,40 +822,61 @@ export async function performL2ReturnToL1(
     );
   }
 
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
   assertPendingL2Review(employee);
 
   const fromStatus = employee.status;
-  employee.status = EmployeeStatus.L1_REVIEW;
-  employee.correctionNotes = comment;
-  employee.l1Decision = undefined;
-  employee.l1ApprovedAt = undefined;
-  // Keep the L2 trail so the send-back stays visible on the L2 reversed list
-  // until L1 re-approves it.
-  employee.l2Decision = {
-    action: "RETURN_TO_L1",
+  const now = new Date();
+  const l2Decision = {
+    action: "RETURN_TO_L1" as const,
     comment,
-    decidedBy: new mongoose.Types.ObjectId(reviewerId),
-    decidedAt: new Date(),
+    decidedBy: reviewerId,
+    decidedAt: now.toISOString(),
   };
-  await employee.save();
 
-  await recordHistory({
-    employeeId: employee._id,
-    fromStatus,
-    toStatus: EmployeeStatus.L1_REVIEW,
-    action: "L2_RETURN_TO_L1",
-    performedBy: reviewerId,
-    performedByRole: UserRole.L2,
-    comment,
-  });
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        status: EmployeeStatus.L1_REVIEW,
+        correctionNotes: comment,
+        l1Decision: Prisma.DbNull,
+        l1ApprovedAt: null,
+        l2Decision: asInputJson(l2Decision),
+        updatedAt: now,
+      },
+    }),
+    prisma.approvalHistory.create({
+      data: {
+        id: newObjectIdString(),
+        employeeId,
+        fromStatus,
+        toStatus: EmployeeStatus.L1_REVIEW,
+        action: "L2_RETURN_TO_L1",
+        performedBy: reviewerId,
+        performedByRole: UserRole.L2,
+        comment,
+        createdAt: now,
+      },
+    }),
+  ]);
 
-  void dispatchCorrectionRequired(employeeNotifyContext(employee), "L2", comment).catch(
-    () => undefined
-  );
+  void dispatchCorrectionRequired(
+    employeeNotifyContext({
+      _id: employee.id,
+      applicationRef: employee.applicationRef,
+      employeeId: employee.employeeId ?? undefined,
+      personalDetails: (employee.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    }),
+    "L2",
+    comment
+  ).catch(() => undefined);
 }
 
 export async function performForwardToSupport(
@@ -574,22 +884,20 @@ export async function performForwardToSupport(
   reviewerId: string,
   comment?: string
 ): Promise<void> {
-  await connectDB();
-  const employee = await Employee.findById(employeeId);
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+  });
   if (!employee) throw new ApprovalError("Application not found", "NOT_FOUND");
 
-  const allowed = [
-    EmployeeStatus.APPROVED,
-    EmployeeStatus.ID_GENERATED,
-  ];
-  if (!allowed.includes(employee.status)) {
+  const allowed = [EmployeeStatus.APPROVED, EmployeeStatus.ID_GENERATED];
+  if (!allowed.includes(employee.status as EmployeeStatus)) {
     throw new ApprovalError(
       "Application must be approved before forwarding to Support",
       "INVALID_STATUS"
     );
   }
 
-  if (employee.l2Decision?.action !== "APPROVE") {
+  if (decisionAction(employee.l2Decision) !== "APPROVE") {
     throw new ApprovalError(
       "Only L2-approved applications can be forwarded",
       "INVALID_STATUS"
@@ -618,36 +926,66 @@ export async function performForwardToSupport(
     const { organizeEmployeeDocumentsFolder } = await import(
       "@/lib/services/employee-documents-folder.service"
     );
-    const current = await Employee.findById(employeeId);
-    if (current && !current.documentsFolder?.folderPath) {
+    const current = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { documentsFolder: true },
+    });
+    const folder = asRecord(current?.documentsFolder);
+    if (current && !folder?.folderPath) {
       await organizeEmployeeDocumentsFolder(employeeId);
     }
   } catch {
     // non-blocking
   }
 
-  const fromStatus = employee.status;
-  employee.forwardedToSupportAt = new Date();
-  employee.l2Decision = {
-    ...employee.l2Decision,
-    action: "FORWARD",
-    comment: comment ?? employee.l2Decision.comment,
-    decidedBy: employee.l2Decision.decidedBy,
-    decidedAt: new Date(),
-  };
-  await employee.save();
-
-  await recordHistory({
-    employeeId: employee._id,
-    fromStatus,
-    toStatus: employee.status,
-    action: "L2_FORWARD",
-    performedBy: reviewerId,
-    performedByRole: UserRole.L2,
-    comment,
+  const fresh = await prisma.employee.findUnique({
+    where: { id: employeeId },
   });
+  if (!fresh) throw new ApprovalError("Application not found", "NOT_FOUND");
 
-  void dispatchForwardedToSupport(employeeNotifyContext(employee)).catch(
-    () => undefined
-  );
+  const fromStatus = fresh.status;
+  const now = new Date();
+  const prevDecision = asRecord(fresh.l2Decision) ?? {};
+  const l2Decision = {
+    ...prevDecision,
+    action: "FORWARD",
+    comment: comment ?? prevDecision.comment,
+    decidedBy: prevDecision.decidedBy ?? reviewerId,
+    decidedAt: now.toISOString(),
+  };
+
+  await prisma.$transaction([
+    prisma.employee.update({
+      where: { id: employeeId },
+      data: {
+        forwardedToSupportAt: now,
+        l2Decision: asInputJson(l2Decision),
+        updatedAt: now,
+      },
+    }),
+    prisma.approvalHistory.create({
+      data: {
+        id: newObjectIdString(),
+        employeeId,
+        fromStatus,
+        toStatus: fresh.status,
+        action: "L2_FORWARD",
+        performedBy: reviewerId,
+        performedByRole: UserRole.L2,
+        comment,
+        createdAt: now,
+      },
+    }),
+  ]);
+
+  void dispatchForwardedToSupport(
+    employeeNotifyContext({
+      _id: fresh.id,
+      applicationRef: fresh.applicationRef,
+      employeeId: fresh.employeeId ?? undefined,
+      personalDetails: (fresh.personalDetails ?? undefined) as
+        | Record<string, unknown>
+        | undefined,
+    })
+  ).catch(() => undefined);
 }

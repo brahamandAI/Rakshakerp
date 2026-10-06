@@ -24,6 +24,7 @@ export default async function L1ReversedFromL2Page() {
         emptyMessage="No applications reversed from L2"
         emptyDescription="Applications sent back by the L2 approver will appear here with their reverse note."
         showL2ReverseNote
+        exportScope="l1"
       />
     </div>
   );

@@ -3,8 +3,7 @@
 import { cookies } from "next/headers";
 import { encode } from "@auth/core/jwt";
 import { signOut } from "@/lib/auth/config";
-import { connectDB } from "@/lib/db/connect";
-import { User } from "@/lib/db/models/User";
+import { prisma } from "@/lib/db/prisma";
 import {
   authenticateEmployeePortal,
   verifyEmployeeOtp,
@@ -113,9 +112,8 @@ export async function staffLoginAction(
   const callbackUrl = formData.get("callbackUrl")?.toString() ?? "";
 
   try {
-    await connectDB();
-    const dbUser = await User.findOne({
-      email: parsed.data.email.toLowerCase(),
+    const dbUser = await prisma.user.findUnique({
+      where: { email: parsed.data.email.toLowerCase() },
     });
 
     if (!dbUser || !dbUser.isActive || !isStaffRole(dbUser.role)) {
@@ -140,14 +138,23 @@ export async function staffLoginAction(
     );
 
     if (!isValid) {
-      dbUser.failedLoginAttempts += 1;
-      if (dbUser.failedLoginAttempts >= MAX_LOGIN_ATTEMPTS) {
-        dbUser.lockedUntil = new Date(
-          Date.now() + ACCOUNT_LOCK_MINUTES * 60 * 1000
-        );
-        dbUser.failedLoginAttempts = 0;
-      }
-      await dbUser.save();
+      const failedLoginAttempts = dbUser.failedLoginAttempts + 1;
+      const lockAccount = failedLoginAttempts >= MAX_LOGIN_ATTEMPTS;
+
+      await prisma.user.update({
+        where: { id: dbUser.id },
+        data: lockAccount
+          ? {
+              failedLoginAttempts: 0,
+              lockedUntil: new Date(
+                Date.now() + ACCOUNT_LOCK_MINUTES * 60 * 1000
+              ),
+            }
+          : {
+              failedLoginAttempts,
+            },
+      });
+
       return {
         success: false,
         error: "Invalid email or password",
@@ -163,13 +170,17 @@ export async function staffLoginAction(
       };
     }
 
-    dbUser.failedLoginAttempts = 0;
-    dbUser.lockedUntil = undefined;
-    dbUser.lastLoginAt = new Date();
-    await dbUser.save();
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      },
+    });
 
     await createStaffSessionCookie({
-      id: dbUser._id.toString(),
+      id: dbUser.id,
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role,
@@ -338,8 +349,9 @@ export async function changePasswordAction(
 
   try {
     const { user } = await requireStaffAuth();
-    await connectDB();
-    const dbUser = await User.findById(user.id);
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+    });
     if (!dbUser) {
       return { success: false, error: "User not found" };
     }
@@ -352,11 +364,15 @@ export async function changePasswordAction(
       return { success: false, error: "Current password is incorrect" };
     }
 
-    dbUser.passwordHash = await hashPassword(parsed.data.newPassword);
-    dbUser.passwordChangedAt = new Date();
-    dbUser.resetPasswordToken = undefined;
-    dbUser.resetPasswordExpires = undefined;
-    await dbUser.save();
+    await prisma.user.update({
+      where: { id: dbUser.id },
+      data: {
+        passwordHash: await hashPassword(parsed.data.newPassword),
+        passwordChangedAt: new Date(),
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      },
+    });
 
     return { success: true };
   } catch {

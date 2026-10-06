@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String              @id
+  email               String              @unique
+  passwordHash        String
+  name                String
+  role                String
+  isActive            Boolean
+  failedLoginAttempts Int                 @default(0)
+  createdAt           DateTime
+  updatedAt           DateTime
+  lastLoginAt         DateTime?
+  approvalHistories   ApprovalHistory[]
+  auditLogs           AuditLog[]
+  downloadLogs        IdCardDownloadLog[]
+  notifications       Notification[]
+
+  @@map("users")
+}
+
+model Department {
+  id           String        @id
+  name         String
+  code         String
+  description  String?
+  isActive     Boolean
+  createdAt    DateTime
+  updatedAt    DateTime
+  designations Designation[]
+
+  @@map("departments")
+}
+
+model Designation {
+  id           String     @id
+  code         String
+  name         String
+  departmentId String
+  isActive     Boolean
+  level        Int?
+  createdAt    DateTime
+  updatedAt    DateTime
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId])
+  @@map("designations")
+}
+
+model SiteLocation {
+  id        String   @id
+  name      String
+  code      String
+  city      String
+  state     String
+  isActive  Boolean
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@map("sitelocations")
+}
+
+model Employee {
+  id              String              @id
+  applicationRef  String              @unique
+  email           String
+  phone           String
+  status          String
+  currentStep     Int
+  completedSteps  Json
+  personalDetails Json
+  createdAt       DateTime
+  updatedAt       DateTime
+  approvalHistory ApprovalHistory[]
+  documents       EmployeeDocument[]
+  downloadLogs    IdCardDownloadLog[]
+  idCard          IdCard?
+  notifications   Notification[]
+
+  @@map("employees")
+}
+
+model EmployeeDocument {
+  id           String   @id
+  employeeId   String
+  documentType String
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  url          String
+  version      Int
+  isActive     Boolean
+  uploadedBy   String
+  createdAt    DateTime
+  updatedAt    DateTime
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@map("employeedocuments")
+}
+
+model ApprovalHistory {
+  id              String   @id
+  employeeId      String
+  fromStatus      String
+  toStatus        String
+  action          String
+  performedBy     String?
+  performedByRole String
+  createdAt       DateTime
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  performer       User?    @relation(fields: [performedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([performedBy])
+  @@map("approvalhistories")
+}
+
+model Notification {  id                String    @id
+  recipientType     String
+  recipientId       String?
+  recipientLegacyId String?
+  employeeId        String?
+  applicationRef    String?
+  type              String
+  title             String
+  body              String
+  linkUrl           String?
+  createdAt         DateTime
+  employee          Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  recipientUser     User?     @relation(fields: [recipientId], references: [id])
+
+  @@index([employeeId])
+  @@index([recipientId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id              String   @id
+  action          String
+  entity          String
+  entityId        String
+  performedBy     String?
+  performedByName String
+  performedByRole String
+  details         Json
+  createdAt       DateTime
+  performedByUser User?    @relation(fields: [performedBy], references: [id])
+
+  @@index([entity, entityId])
+  @@index([performedBy])
+  @@map("auditlogs")
+}
+
+model IdCard {
+  id             String   @id
+  employeeId     String   @unique
+  employeeIdCode String
+  url            String
+  format         String
+  status         String
+  generatedAt    DateTime
+  createdAt      DateTime
+  updatedAt      DateTime
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("idcards")
+}
+
+model IdCardDownloadLog {
+  id              String   @id
+  employeeId      String
+  employeeIdCode  String
+  employeeName    String
+  action          String
+  performedBy     String
+  performedByRole String
+  createdAt       DateTime
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  performedByUser User     @relation(fields: [performedBy], references: [id])
+
+  @@index([employeeId])
+  @@index([performedBy])
+  @@map("idcarddownloadlogs")
+}
+
+model Setting {
+  id        String   @id
+  key       String   @unique
+  value     Json
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@map("settings")
+}
+
+model OtpToken {
+  id String @id
+
+  @@map("otptokens")
+}

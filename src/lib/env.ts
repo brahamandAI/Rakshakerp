@@ -17,9 +17,15 @@ function isSet(value: string | undefined): boolean {
 export function getRequiredEnvChecks(): EnvCheck[] {
   return [
     {
-      key: "MONGODB_URI",
-      label: "MongoDB connection",
+      key: "DATABASE_URL",
+      label: "PostgreSQL connection",
       required: true,
+      configured: isSet(process.env.DATABASE_URL),
+    },
+    {
+      key: "MONGODB_URI",
+      label: "MongoDB connection (migration/offline only)",
+      required: false,
       configured: isSet(process.env.MONGODB_URI),
     },
     {

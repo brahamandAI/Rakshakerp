@@ -14,12 +14,12 @@ export default async function AdminSitesPage() {
     _id: String(s._id),
     name: s.name,
     code: s.code,
-    address: s.address,
+    address: s.address ?? undefined,
     city: s.city,
     state: s.state,
-    pincode: s.pincode,
-    contactPerson: s.contactPerson,
-    contactPhone: s.contactPhone,
+    pincode: s.pincode ?? undefined,
+    contactPerson: s.contactPerson ?? undefined,
+    contactPhone: s.contactPhone ?? undefined,
     isActive: s.isActive,
   }));
 

@@ -29,7 +29,7 @@
   }
 
   body {
-    @apply bg-[#F4F7FB] text-[#0F172A] antialiased;
+    @apply bg-white text-[#0F172A] antialiased;
     overflow-wrap: break-word;
   }
 
@@ -81,19 +81,20 @@
   }
 
   .marketing-mesh {
-    background-color: #071526;
+    background-color: #f4f9fc;
     background-image:
-      radial-gradient(ellipse 70% 55% at 12% 18%, rgba(14, 165, 233, 0.28), transparent),
-      radial-gradient(ellipse 55% 45% at 88% 12%, rgba(212, 175, 55, 0.22), transparent),
-      radial-gradient(ellipse 50% 40% at 70% 85%, rgba(15, 118, 110, 0.2), transparent),
-      linear-gradient(145deg, #071526 0%, #0b1f3a 45%, #12325c 100%);
+      radial-gradient(ellipse 70% 55% at 88% 18%, rgba(56, 189, 248, 0.22), transparent),
+      radial-gradient(ellipse 55% 45% at 92% 75%, rgba(45, 212, 191, 0.16), transparent),
+      radial-gradient(ellipse 45% 40% at 8% 70%, rgba(14, 165, 233, 0.1), transparent),
+      linear-gradient(165deg, #f8fbff 0%, #eef7fb 45%, #e8f4f2 100%);
   }
 
   .dashboard-shell-bg {
-    background-color: #f3f6fb;
+    background-color: #f5f9fc;
     background-image:
-      radial-gradient(ellipse 70% 40% at 0% 0%, rgba(14, 165, 233, 0.05), transparent),
-      linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+      radial-gradient(ellipse 65% 40% at 0% 0%, rgba(14, 165, 233, 0.07), transparent),
+      radial-gradient(ellipse 40% 30% at 100% 0%, rgba(30, 144, 255, 0.05), transparent),
+      linear-gradient(180deg, #f8fbff 0%, #f1f5f9 100%);
   }
 
   .dashboard-panel {

@@ -33,7 +33,8 @@ export async function GET() {
   const canDownloadFolder =
     role === UserRole.ADMIN ||
     role === UserRole.SUPPORT ||
-    role === UserRole.L2;
+    role === UserRole.L2 ||
+    role === UserRole.SCANNING;
 
   return NextResponse.json({
     ...data,

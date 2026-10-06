@@ -11,7 +11,6 @@ import { ServicesShowcase } from "@/components/marketing/home/ServicesShowcase";
 import { FAQSection } from "@/components/marketing/home/FAQSection";
 import { ContactSection } from "@/components/marketing/home/ContactSection";
 import { PortalRolesSection } from "@/components/marketing/home/PortalRolesSection";
-import { HomePortalInfoSection } from "@/components/marketing/home/HomePortalInfoSection";
 import { CTABanner } from "@/components/marketing/CTABanner";
 
 export function MarketingPage() {
@@ -50,14 +49,13 @@ export function MarketingPage() {
       <HomeApplicationOverview />
       <PlatformFeaturesSection />
       <PortalRolesSection />
-      <HomePortalInfoSection />
       <CTABanner
         title="Ready to continue onboarding?"
         description="Sign in to your role dashboard to register employees, review applications, generate Temporary Employee IDs, and manage document folders."
         primaryHref="/staff/login"
-        primaryLabel="Staff Login"
+        primaryLabel="Open staff dashboard"
         secondaryHref="/?section=contact"
-        secondaryLabel="Contact Us"
+        secondaryLabel="Contact us"
       />
     </>
   );

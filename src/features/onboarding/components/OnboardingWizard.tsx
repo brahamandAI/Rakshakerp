@@ -77,6 +77,7 @@ export function OnboardingWizard({
 
   const persistChainRef = useRef(Promise.resolve());
   const persistFailedRef = useRef(false);
+  const forceNextPersistRef = useRef(false);
   const advanceLockRef = useRef(false);
   const sessionReadyRef = useRef(
     Promise.resolve(Boolean(initialEmployee.applicationRef) || !registrationMode)
@@ -92,7 +93,10 @@ export function OnboardingWizard({
   function enqueuePersist(task: () => Promise<void>) {
     persistChainRef.current = persistChainRef.current
       .then(async () => {
-        if (persistFailedRef.current) return;
+        const force = forceNextPersistRef.current;
+        forceNextPersistRef.current = false;
+        if (persistFailedRef.current && !force) return;
+        if (force) persistFailedRef.current = false;
         await task();
       })
       .catch((error) => {
@@ -102,10 +106,40 @@ export function OnboardingWizard({
   }
 
   const ensureApplicationReady = useCallback(async () => {
-    const sessionOk = await sessionReadyRef.current.catch(() => false);
     if (employeeRef.current.applicationRef) return true;
     if (!registrationMode) return true;
-    return sessionOk && !persistFailedRef.current;
+
+    const deadline = Date.now() + 20000;
+    while (Date.now() < deadline) {
+      if (employeeRef.current.applicationRef) return true;
+
+      const pending = sessionReadyRef.current;
+      const winner = await Promise.race([
+        pending.then(
+          (ok) => ({ kind: "session" as const, ok }),
+          () => ({ kind: "session" as const, ok: false })
+        ),
+        new Promise<{ kind: "timeout" }>((resolve) => {
+          window.setTimeout(() => resolve({ kind: "timeout" }), 300);
+        }),
+      ]);
+
+      if (employeeRef.current.applicationRef) return true;
+
+      if (winner.kind === "timeout") continue;
+
+      if (sessionReadyRef.current !== pending) continue;
+
+      await persistChainRef.current.catch(() => undefined);
+      if (employeeRef.current.applicationRef) return true;
+
+      if (winner.ok && !persistFailedRef.current) {
+        return Boolean(employeeRef.current.applicationRef);
+      }
+      if (!sessionReadyResolveRef.current) return false;
+    }
+
+    return Boolean(employeeRef.current.applicationRef);
   }, [registrationMode]);
 
   function mergeStepData(step: number, data: Record<string, unknown>) {
@@ -171,28 +205,34 @@ export function OnboardingWizard({
       }, 400);
 
       mergeStepData(step, data);
-      if (!completedSteps.includes(step)) {
-        setCompletedSteps((prev) => [...prev, step].sort((a, b) => a - b));
-      }
 
       const next = step < ONBOARDING_TOTAL_STEPS ? step + 1 : step;
-      if (next !== step) {
-        setCurrentStep(next);
-        scrollFormChromeIntoView();
-      }
-
       const needsRegister =
         registrationMode && !employeeRef.current.applicationRef && step === 1;
+
+      if (!needsRegister) {
+        if (!completedSteps.includes(step)) {
+          setCompletedSteps((prev) => [...prev, step].sort((a, b) => a - b));
+        }
+        if (next !== step) {
+          setCurrentStep(next);
+          scrollFormChromeIntoView();
+        }
+      }
 
       if (needsRegister || employeeRef.current.applicationRef) {
         persistFailedRef.current = false;
       }
+
+      if (needsRegister) forceNextPersistRef.current = true;
 
       if (needsRegister && !sessionReadyResolveRef.current) {
         sessionReadyRef.current = new Promise<boolean>((resolve) => {
           sessionReadyResolveRef.current = resolve;
         });
       }
+
+      if (needsRegister) setIsSaving(true);
 
       enqueuePersist(async () => {
         setIsSaving(true);
@@ -237,6 +277,13 @@ export function OnboardingWizard({
               setLastSavedAt(new Date().toISOString());
               sessionReadyResolveRef.current?.(true);
               sessionReadyResolveRef.current = undefined;
+              if (!completedSteps.includes(step)) {
+                setCompletedSteps((prev) => [...prev, step].sort((a, b) => a - b));
+              }
+              if (next !== step) {
+                setCurrentStep(next);
+                scrollFormChromeIntoView();
+              }
             } catch (error) {
               persistFailedRef.current = true;
               sessionReadyResolveRef.current?.(false);
@@ -464,6 +511,14 @@ export function OnboardingWizard({
 
   function handleStepClick(step: number) {
     if (step === currentStep) return;
+    if (registrationMode && !employeeRef.current.applicationRef && step > 1) {
+      toast({
+        title: "Save applicant details first",
+        description: "Finish section 1 so the application is created, then upload documents.",
+        variant: "destructive",
+      });
+      return;
+    }
     setCurrentStep(step);
     scrollFormChromeIntoView();
     if (!isNewRegistration) {

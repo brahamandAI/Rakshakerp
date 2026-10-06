@@ -27,6 +27,7 @@ export default async function L1AllRegistrationsPage() {
         applications={applications}
         showEmployeeId
         emptyMessage="No fully approved registrations yet."
+        exportScope="l1"
       />
     </div>
   );

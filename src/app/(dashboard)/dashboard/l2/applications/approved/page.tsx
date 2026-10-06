@@ -28,6 +28,7 @@ export default async function L2ApprovedApplicationsPage() {
         showEmployeeId
         viewPathPrefix="/dashboard/l2/applications"
         emptyMessage="No approved applications yet."
+        exportScope="l2"
       />
     </div>
   );

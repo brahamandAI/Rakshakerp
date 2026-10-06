@@ -8,7 +8,8 @@ export const REGISTRATION_STATUS_LABELS: Record<EmployeeStatus, string> = {
   [EmployeeStatus.L2_REVIEW]: "Pending L2 Approval",
   [EmployeeStatus.L2_RETURNED]: "Reversed by L2",
   [EmployeeStatus.APPROVED]: "L2 Approved",
-  [EmployeeStatus.ID_GENERATED]: "Sent to Admin",
+  [EmployeeStatus.ID_GENERATED]: "Pending Scanning",
+  [EmployeeStatus.SCANNING_COMPLETED]: "Scanning Completed",
   [EmployeeStatus.ID_CARD_ISSUED]: "Completed",
   [EmployeeStatus.REJECTED]: "Rejected",
 };
@@ -21,7 +22,8 @@ export const APPROVAL_STAGE_LABELS: Record<EmployeeStatus, string> = {
   [EmployeeStatus.L2_REVIEW]: "Pending L2 Approval",
   [EmployeeStatus.L2_RETURNED]: "Reversed (L2)",
   [EmployeeStatus.APPROVED]: "L2 Approved",
-  [EmployeeStatus.ID_GENERATED]: "Sent to Admin",
+  [EmployeeStatus.ID_GENERATED]: "Pending Scanning",
+  [EmployeeStatus.SCANNING_COMPLETED]: "Scanning Completed",
   [EmployeeStatus.ID_CARD_ISSUED]: "Completed",
   [EmployeeStatus.REJECTED]: "Closed",
 };

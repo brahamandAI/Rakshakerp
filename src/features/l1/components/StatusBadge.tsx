@@ -19,6 +19,8 @@ const STATUS_STYLES: Record<EmployeeStatus, string> = {
     "bg-emerald-50 text-emerald-800 border-emerald-200",
   [EmployeeStatus.ID_GENERATED]:
     "bg-teal-50 text-teal-800 border-teal-200",
+  [EmployeeStatus.SCANNING_COMPLETED]:
+    "bg-cyan-50 text-cyan-900 border-cyan-200",
   [EmployeeStatus.ID_CARD_ISSUED]:
     "bg-[#0B1F3A]/5 text-[#0B1F3A] border-[#0B1F3A]/15",
   [EmployeeStatus.REJECTED]:

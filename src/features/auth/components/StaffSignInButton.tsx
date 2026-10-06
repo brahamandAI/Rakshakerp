@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface StaffSignInButtonProps {
-  variant?: "default" | "outline";
+  variant?: "default" | "outline" | "sky";
   size?: "sm" | "default";
   className?: string;
   defaultRole?: string;

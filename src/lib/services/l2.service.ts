@@ -1,186 +1,188 @@
-import { connectDB } from "@/lib/db/connect";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
 import { EmployeeStatus } from "@/types/enums";
-import { ApplicationListItem } from "@/lib/services/l1.service";
-import { L2_PENDING_FILTER } from "@/lib/services/approval-queue";
-import { toClientProps } from "@/lib/serialize/client-props";
 import {
-  pickSearchableAdditional,
-  pickSearchablePersonal,
-} from "@/lib/ui/registration-search";
+  ApplicationListItem,
+  listSelect,
+  mapRows,
+  type EmployeeListRow,
+} from "@/lib/services/l1.service";
+import {
+  decidedByMatches,
+  decisionAction,
+  isL2PendingEmployee,
+} from "@/lib/services/approval-queue";
 
-function mapEmployee(emp: Record<string, unknown>): ApplicationListItem {
-  const personal = emp.personalDetails as {
-    fullName?: string;
-    postAppliedFor?: string;
-    fatherName?: string;
-    fatherOrHusbandName?: string;
-    aadhaarNumber?: string;
-    panNumber?: string;
-  } | undefined;
-  const additional = emp.additionalDetails as {
-    uanNo?: string;
-    esicNumber?: string;
-    accountNumber?: string;
-  } | undefined;
-  const searchablePersonal = pickSearchablePersonal(personal);
-  const searchableAdditional = pickSearchableAdditional(additional);
-  const submittedBy = emp.submittedBy as { name?: string; email?: string } | null | undefined;
-  const snapshotName = typeof emp.submittedByName === "string" ? emp.submittedByName : undefined;
-  const snapshotEmail = typeof emp.submittedByEmail === "string" ? emp.submittedByEmail : undefined;
-  const l1Decision = emp.l1Decision as
-    | { decidedBy?: { name?: string } | null; approvedByName?: string }
-    | undefined;
-  return toClientProps({
-    _id: String(emp._id),
-    applicationRef: String(emp.applicationRef),
-    fullName: personal?.fullName ?? "Unknown",
-    email: String(emp.email),
-    phone: String(emp.phone),
-    postAppliedFor: personal?.postAppliedFor,
-    status: emp.status as EmployeeStatus,
-    submittedAt: emp.submittedAt
-      ? new Date(emp.submittedAt as Date).toISOString()
-      : undefined,
-    employeeId: emp.employeeId as string | undefined,
-    temporaryEmployeeId: emp.temporaryEmployeeId as string | undefined,
-    fatherName: searchablePersonal.fatherName || undefined,
-    aadhaarNumber: searchablePersonal.aadhaarNumber || undefined,
-    panNumber: searchablePersonal.panNumber || undefined,
-    uanNo: searchableAdditional.uanNo || undefined,
-    esicNumber: searchableAdditional.esicNumber || undefined,
-    accountNumber: searchableAdditional.accountNumber || undefined,
-    l1ApprovedAt: emp.l1ApprovedAt
-      ? new Date(emp.l1ApprovedAt as Date).toISOString()
-      : undefined,
-    submittedByName:
-      (submittedBy && typeof submittedBy === "object" && submittedBy.name
-        ? submittedBy.name
-        : snapshotName) || undefined,
-    submittedByEmail:
-      (submittedBy && typeof submittedBy === "object" && submittedBy.email
-        ? submittedBy.email
-        : snapshotEmail) || undefined,
-    l1ApprovedByName: l1Decision?.approvedByName || l1Decision?.decidedBy?.name,
-  });
-}
-
-/**
- * Everything this L2 approver sent back or rejected.
- * "RETURN_TO_L1" has no reversed status of its own (the application goes back
- * to L1_REVIEW), so it is matched on the decision trail instead.
- */
-function l2ReversedFilter(l2UserId: string) {
-  return {
-    $or: [
-      { status: EmployeeStatus.L2_RETURNED, "l2Decision.decidedBy": l2UserId },
-      { status: EmployeeStatus.REJECTED, "l2Decision.decidedBy": l2UserId },
-      { "l2Decision.action": "RETURN_TO_L1", "l2Decision.decidedBy": l2UserId },
-    ],
-  };
+function l2ReversedMatch(emp: EmployeeListRow, l2UserId: string): boolean {
+  if (
+    emp.status === EmployeeStatus.L2_RETURNED &&
+    decidedByMatches(emp.l2Decision, l2UserId)
+  ) {
+    return true;
+  }
+  if (
+    emp.status === EmployeeStatus.REJECTED &&
+    decidedByMatches(emp.l2Decision, l2UserId)
+  ) {
+    return true;
+  }
+  if (
+    decisionAction(emp.l2Decision) === "RETURN_TO_L1" &&
+    decidedByMatches(emp.l2Decision, l2UserId)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export async function getL2Stats(l2UserId: string) {
-  await connectDB();
-
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [pending, approved, rejected, forwarded, approvedThisMonth] = await Promise.all([
-    Employee.countDocuments(L2_PENDING_FILTER),
-    Employee.countDocuments({
-      "l2Decision.action": { $in: ["APPROVE", "FORWARD"] },
-      "l2Decision.decidedBy": l2UserId,
-    }),
-    Employee.countDocuments(l2ReversedFilter(l2UserId)),
-    Employee.countDocuments({
-      forwardedToAdminAt: { $exists: true },
-      "l2Decision.decidedBy": l2UserId,
-    }),
-    Employee.countDocuments({
-      "l2Decision.action": { $in: ["APPROVE", "FORWARD"] },
-      "l2Decision.decidedBy": l2UserId,
-      "l2Decision.decidedAt": { $gte: startOfMonth },
-    }),
-  ]);
+  const candidates = await prisma.employee.findMany({
+    where: { status: { not: EmployeeStatus.DRAFT } },
+    select: {
+      id: true,
+      status: true,
+      l1Decision: true,
+      l2Decision: true,
+      forwardedToAdminAt: true,
+      forwardedToSupportAt: true,
+    },
+  });
+
+  let pending = 0;
+  let approved = 0;
+  let rejected = 0;
+  let forwarded = 0;
+  let approvedThisMonth = 0;
+
+  for (const emp of candidates) {
+    if (isL2PendingEmployee(emp)) pending += 1;
+
+    const l2Action = decisionAction(emp.l2Decision);
+    const isApproveOrForward =
+      (l2Action === "APPROVE" || l2Action === "FORWARD") &&
+      decidedByMatches(emp.l2Decision, l2UserId);
+
+    if (isApproveOrForward) {
+      approved += 1;
+      const decidedAt = (emp.l2Decision as { decidedAt?: string | Date } | null)
+        ?.decidedAt;
+      if (decidedAt && new Date(decidedAt) >= startOfMonth) {
+        approvedThisMonth += 1;
+      }
+    }
+
+    if (l2ReversedMatch(emp as EmployeeListRow, l2UserId)) rejected += 1;
+
+    if (emp.forwardedToAdminAt && decidedByMatches(emp.l2Decision, l2UserId)) {
+      forwarded += 1;
+    }
+  }
 
   return { pending, approved, rejected, forwarded, approvedThisMonth };
 }
 
 export async function getL2PendingApplications(): Promise<ApplicationListItem[]> {
-  await connectDB();
-  const items = await Employee.find(L2_PENDING_FILTER)
-    .populate("submittedBy", "name email")
-    .populate("l1Decision.decidedBy", "name")
-    .sort({ l1ApprovedAt: -1 })
-    .limit(50)
-    .lean();
+  const candidates = await prisma.employee.findMany({
+    where: {
+      status: EmployeeStatus.L2_REVIEW,
+      forwardedToAdminAt: null,
+      forwardedToSupportAt: null,
+    },
+    select: listSelect,
+    orderBy: { l1ApprovedAt: "desc" },
+    take: 200,
+  });
 
-  return items.map(mapEmployee);
+  const matched = candidates.filter(isL2PendingEmployee).slice(0, 50);
+  return mapRows(matched);
 }
 
 export async function getL2ApprovedApplications(
   l2UserId: string
 ): Promise<ApplicationListItem[]> {
-  await connectDB();
-  const items = await Employee.find({
-    "l2Decision.action": { $in: ["APPROVE", "FORWARD"] },
-    "l2Decision.decidedBy": l2UserId,
-  })
-    .populate("submittedBy", "name email")
-    .populate("l1Decision.decidedBy", "name")
-    .sort({ approvedAt: -1 })
-    .limit(50)
-    .lean();
+  const candidates = await prisma.employee.findMany({
+    where: { approvedAt: { not: null } },
+    select: listSelect,
+    orderBy: { approvedAt: "desc" },
+    take: 300,
+  });
 
-  return items.map(mapEmployee);
+  const matched = candidates
+    .filter((e) => {
+      const action = decisionAction(e.l2Decision);
+      return (
+        (action === "APPROVE" || action === "FORWARD") &&
+        decidedByMatches(e.l2Decision, l2UserId)
+      );
+    })
+    .slice(0, 50);
+
+  return mapRows(matched);
 }
 
 export async function getL2RejectedApplications(
   l2UserId: string
 ): Promise<ApplicationListItem[]> {
-  await connectDB();
-  const items = await Employee.find(l2ReversedFilter(l2UserId))
-    .populate("submittedBy", "name email")
-    .populate("l1Decision.decidedBy", "name")
-    .sort({ updatedAt: -1 })
-    .limit(50)
-    .lean();
+  const candidates = await prisma.employee.findMany({
+    where: {
+      OR: [
+        { status: { in: [EmployeeStatus.L2_RETURNED, EmployeeStatus.REJECTED] } },
+        { status: { in: [EmployeeStatus.L1_REVIEW, EmployeeStatus.SUBMITTED] } },
+      ],
+    },
+    select: listSelect,
+    orderBy: { updatedAt: "desc" },
+    take: 400,
+  });
 
-  return items.map(mapEmployee);
+  const matched = candidates
+    .filter((e) => l2ReversedMatch(e, l2UserId))
+    .slice(0, 50);
+
+  return mapRows(matched);
 }
 
 export async function getL2AllApprovedRegistrations(): Promise<ApplicationListItem[]> {
-  await connectDB();
-  const items = await Employee.find({
-    status: {
-      $in: [
-        EmployeeStatus.APPROVED,
-        EmployeeStatus.ID_GENERATED,
-        EmployeeStatus.ID_CARD_ISSUED,
-      ],
+  const candidates = await prisma.employee.findMany({
+    where: {
+      status: {
+        in: [
+          EmployeeStatus.APPROVED,
+          EmployeeStatus.ID_GENERATED,
+          EmployeeStatus.ID_CARD_ISSUED,
+        ],
+      },
+      temporaryEmployeeId: { not: null },
     },
-    temporaryEmployeeId: { $exists: true, $ne: null },
-    "l2Decision.action": { $in: ["APPROVE", "FORWARD"] },
-  })
-    .populate("submittedBy", "name email")
-    .populate("l1Decision.decidedBy", "name")
-    .sort({ approvedAt: -1, forwardedToAdminAt: -1 })
-    .limit(200)
-    .lean();
+    select: listSelect,
+    orderBy: [{ approvedAt: "desc" }, { forwardedToAdminAt: "desc" }],
+    take: 400,
+  });
 
-  return items.map(mapEmployee);
+  const matched = candidates
+    .filter((e) => {
+      const action = decisionAction(e.l2Decision);
+      return action === "APPROVE" || action === "FORWARD";
+    })
+    .slice(0, 200);
+
+  return mapRows(matched);
 }
 
 export async function getL2RecentPending(limit = 5): Promise<ApplicationListItem[]> {
-  await connectDB();
-  const items = await Employee.find(L2_PENDING_FILTER)
-    .populate("submittedBy", "name email")
-    .populate("l1Decision.decidedBy", "name")
-    .sort({ l1ApprovedAt: -1 })
-    .limit(limit)
-    .lean();
+  const candidates = await prisma.employee.findMany({
+    where: {
+      status: EmployeeStatus.L2_REVIEW,
+      forwardedToAdminAt: null,
+      forwardedToSupportAt: null,
+    },
+    select: listSelect,
+    orderBy: { l1ApprovedAt: "desc" },
+    take: limit * 4,
+  });
 
-  return items.map(mapEmployee);
+  return mapRows(candidates.filter(isL2PendingEmployee).slice(0, limit));
 }

@@ -10,6 +10,7 @@ export function getRoleLabel(role: UserRole | StaffRole): string {
     [UserRole.SUBMITTER]: "Registration Submitter",
     [UserRole.L1]: "L1 Approver",
     [UserRole.L2]: "L2 Approver",
+    [UserRole.SCANNING]: "Scanning",
     [UserRole.SUPPORT]: "Support",
     [UserRole.ADMIN]: "Super Admin",
   };
@@ -45,6 +46,16 @@ export function canAccessRoute(role: StaffRole, pathname: string): boolean {
       "/dashboard/l2/documents",
       "/dashboard/l2/notifications",
       "/dashboard/l2/profile",
+    ],
+    [UserRole.SCANNING]: [
+      "/dashboard/scanning",
+      "/dashboard/scanning/applications",
+      "/dashboard/scanning/applications/pending",
+      "/dashboard/scanning/applications/completed",
+      "/dashboard/scanning/applications/all",
+      "/dashboard/scanning/documents",
+      "/dashboard/scanning/notifications",
+      "/dashboard/scanning/profile",
     ],
     [UserRole.ADMIN]: [
       "/dashboard/admin",

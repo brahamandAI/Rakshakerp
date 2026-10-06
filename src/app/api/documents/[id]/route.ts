@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getEmployeeSession } from "@/lib/auth/employee-session";
-import { connectDB } from "@/lib/db/connect";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
+import { prisma } from "@/lib/db/prisma";
 
 export async function GET(
   _request: NextRequest,
@@ -14,12 +13,14 @@ export async function GET(
     }
 
     const { id } = await params;
-    await connectDB();
 
-    const doc = await EmployeeDocument.findOne({
-      _id: id,
-      employeeId: session.employeeId,
-      isActive: true,
+    const doc = await prisma.employeeDocument.findFirst({
+      where: {
+        id,
+        employeeId: session.employeeId,
+        isActive: true,
+      },
+      select: { url: true },
     });
 
     if (!doc?.url) {

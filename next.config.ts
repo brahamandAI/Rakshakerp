@@ -5,6 +5,8 @@ import path from "path";
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.resolve(__dirname),
   poweredByHeader: false,
+  // Prisma pg adapter uses Node built-ins; keep it out of the instrumentation/webpack graph.
+  serverExternalPackages: ["pg", "@prisma/adapter-pg", "@prisma/client"],
   images: {
     remotePatterns: [
       {

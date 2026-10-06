@@ -45,7 +45,7 @@ export function AuthLayoutShell({
 
           <div className="px-7 pb-8 pt-7 sm:px-9 sm:pb-9 sm:pt-8">
             <div className="mb-8 flex flex-col items-center text-center">
-              <div className="flex w-full justify-center rounded-2xl bg-gradient-to-b from-[#F8FBFF] to-white px-4 py-4 ring-1 ring-[#E8EEF6] transition-shadow duration-200 hover:shadow-[0_10px_28px_-18px_rgba(14,165,233,0.45)]">
+              <div className="flex w-full justify-center rounded-2xl bg-white px-4 py-4 ring-1 ring-sky-100">
                 <BrandLogo
                   href="/"
                   variant="dark"

@@ -5,11 +5,18 @@ import { createPortal } from "react-dom";
 import { Download, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+export type ExportButtonScope = "l1" | "l2" | "admin" | "scanning";
+
 interface DownloadExcelButtonProps {
-  scope: "l1" | "l2" | "admin";
+  scope: ExportButtonScope;
   label?: string;
   /** When set, exports only this registration (Sampleempdetails format). */
   employeeId?: string;
+  /** Export specific registrations (multi-select). */
+  employeeIds?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  disabled?: boolean;
 }
 
 interface PreviewData {
@@ -22,6 +29,10 @@ export function DownloadExcelButton({
   scope,
   label = "Download Excel",
   employeeId,
+  employeeIds,
+  dateFrom,
+  dateTo,
+  disabled = false,
 }: DownloadExcelButtonProps) {
   const [loading, setLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -51,6 +62,11 @@ export function DownloadExcelButton({
     const params = new URLSearchParams({ scope });
     if (preview) params.set("preview", "1");
     if (employeeId) params.set("id", employeeId);
+    if (employeeIds && employeeIds.length > 0) {
+      params.set("ids", employeeIds.join(","));
+    }
+    if (dateFrom) params.set("dateFrom", dateFrom);
+    if (dateTo) params.set("dateTo", dateTo);
     return `/api/export/registrations?${params.toString()}`;
   }
 
@@ -102,6 +118,22 @@ export function DownloadExcelButton({
     }
   }
 
+  const filterHint = [
+    employeeIds && employeeIds.length > 0
+      ? `${employeeIds.length} selected`
+      : employeeId
+        ? "single registration"
+        : null,
+    dateFrom || dateTo
+      ? `dates ${dateFrom || "…"} → ${dateTo || "…"}`
+      : null,
+    scope === "admin" && !employeeId && !(employeeIds?.length)
+      ? "L2 approved only"
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   const modal =
     preview && mounted
       ? createPortal(
@@ -126,11 +158,7 @@ export function DownloadExcelButton({
                   <p className="text-xs text-[#64748B]">
                     Showing {preview.rows.length} of {preview.count} registration
                     {preview.count === 1 ? "" : "s"} · {preview.columns.length} columns
-                    {employeeId
-                      ? " (single registration)"
-                      : scope === "admin"
-                        ? " (L2 approved only)"
-                        : ""}
+                    {filterHint ? ` · ${filterHint}` : ""}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -213,6 +241,7 @@ export function DownloadExcelButton({
           size="sm"
           onClick={loadPreview}
           isLoading={previewLoading}
+          disabled={disabled}
         >
           <Eye className="h-4 w-4" />
           Preview Excel
@@ -223,6 +252,7 @@ export function DownloadExcelButton({
           size="sm"
           onClick={handleDownload}
           isLoading={loading}
+          disabled={disabled}
         >
           <Download className="h-4 w-4" />
           {label}

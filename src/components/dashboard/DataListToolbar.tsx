@@ -27,6 +27,11 @@ interface DataListToolbarProps {
   searchPlaceholder?: string;
   showStatusFilter?: boolean;
   showSort?: boolean;
+  dateFrom?: string;
+  dateTo?: string;
+  onDateFromChange?: (value: string) => void;
+  onDateToChange?: (value: string) => void;
+  showDateFilter?: boolean;
 }
 
 const SORT_OPTIONS = [
@@ -57,6 +62,11 @@ export function DataListToolbar({
   searchPlaceholder,
   showStatusFilter = true,
   showSort = true,
+  dateFrom = "",
+  dateTo = "",
+  onDateFromChange,
+  onDateToChange,
+  showDateFilter = false,
 }: DataListToolbarProps) {
   return (
     <div className="flex flex-col gap-3 border-b border-[#E8EEF5] bg-[#F8FAFC] px-4 py-3 sm:px-5">
@@ -131,6 +141,56 @@ export function DataListToolbar({
           </div>
         )}
       </div>
+
+      {showDateFilter && onDateFromChange && onDateToChange && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="w-full sm:w-44">
+            <label
+              className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#64748B]"
+              htmlFor="list-date-from"
+            >
+              From date
+            </label>
+            <Input
+              id="list-date-from"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => onDateFromChange(e.target.value)}
+              className="h-10 py-0 leading-none"
+            />
+          </div>
+          <div className="w-full sm:w-44">
+            <label
+              className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-[#64748B]"
+              htmlFor="list-date-to"
+            >
+              To date
+            </label>
+            <Input
+              id="list-date-to"
+              type="date"
+              value={dateTo}
+              onChange={(e) => onDateToChange(e.target.value)}
+              className="h-10 py-0 leading-none"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-10"
+              onClick={() => {
+                onDateFromChange("");
+                onDateToChange("");
+              }}
+            >
+              Clear dates
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#64748B]">
         <p>
           {total === 0

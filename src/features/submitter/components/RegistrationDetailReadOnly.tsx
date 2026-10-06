@@ -8,6 +8,11 @@ import { EmployeeDocumentsFolderPanel } from "@/features/documents/components/Em
 import { StatusBadge } from "@/features/l1/components/StatusBadge";
 import { EmployeeStatus } from "@/types/enums";
 import { FileText } from "lucide-react";
+import {
+  flattenDisplayEntries,
+  formatDisplayValue,
+  humanizeKey,
+} from "@/lib/utils/display-value";
 
 interface RegistrationDetailReadOnlyProps {
   employeeId?: string;
@@ -35,7 +40,9 @@ interface RegistrationDetailReadOnlyProps {
 }
 
 function Grid({ title, data }: { title: string; data?: Record<string, unknown> }) {
-  if (!data || Object.keys(data).length === 0) return null;
+  if (!data) return null;
+  const entries = flattenDisplayEntries(data);
+  if (entries.length === 0) return null;
   return (
     <Card>
       <CardHeader>
@@ -43,12 +50,12 @@ function Grid({ title, data }: { title: string; data?: Record<string, unknown> }
       </CardHeader>
       <CardContent>
         <dl className="grid gap-3 sm:grid-cols-2">
-          {Object.entries(data).map(([k, v]) => (
+          {entries.map(([k, v]) => (
             <div key={k}>
               <dt className="text-xs uppercase text-[#64748B]">
-                {k.replace(/([A-Z])/g, " $1").trim()}
+                {humanizeKey(k)}
               </dt>
-              <dd className="text-sm text-[#0F172A]">{String(v ?? "—")}</dd>
+              <dd className="text-sm text-[#0F172A]">{formatDisplayValue(v)}</dd>
             </div>
           ))}
         </dl>

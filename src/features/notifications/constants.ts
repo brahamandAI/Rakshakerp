@@ -61,6 +61,7 @@ export const STAFF_NOTIFICATIONS_PATH: Record<string, string> = {
   SUBMITTER: "/dashboard/submitter/notifications",
   L1: "/dashboard/l1/notifications",
   L2: "/dashboard/l2/notifications",
+  SCANNING: "/dashboard/scanning/notifications",
   SUPPORT: "/dashboard/support/notifications",
   ADMIN: "/dashboard/admin/notifications",
 };

@@ -45,6 +45,7 @@ const UserSchema = new Schema<IUser>(
         UserRole.SUBMITTER,
         UserRole.L1,
         UserRole.L2,
+        UserRole.SCANNING,
         UserRole.SUPPORT,
         UserRole.ADMIN,
       ],

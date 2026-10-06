@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/config";
 import { UserRole } from "@/types/enums";
-import { connectDB } from "@/lib/db/connect";
-import { EmployeeDocument } from "@/lib/db/models/EmployeeDocument";
-import { Employee } from "@/lib/db/models/Employee";
+import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +10,7 @@ export const dynamic = "force-dynamic";
 const REVIEWER_ROLES: string[] = [
   UserRole.L1,
   UserRole.L2,
+  UserRole.SCANNING,
   UserRole.ADMIN,
   UserRole.SUPPORT,
 ];
@@ -35,24 +34,25 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 
   const { docId } = await params;
-  await connectDB();
 
-  const doc = await EmployeeDocument.findOne({ _id: docId, isActive: true });
+  const doc = await prisma.employeeDocument.findFirst({
+    where: { id: docId, isActive: true },
+  });
   if (!doc) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
 
   if (!REVIEWER_ROLES.includes(role)) {
-    // Submitters may only open documents belonging to their own registrations.
     if (role !== UserRole.SUBMITTER) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const employee = await Employee.findById(doc.employeeId)
-      .select("submittedBy")
-      .lean();
+    const employee = await prisma.employee.findUnique({
+      where: { id: doc.employeeId },
+      select: { submittedBy: true },
+    });
 
-    if (!employee || employee.submittedBy?.toString() !== session.user.id) {
+    if (!employee || employee.submittedBy !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }

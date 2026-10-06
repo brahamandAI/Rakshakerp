@@ -104,7 +104,9 @@ export function FileUploadField({
           if (!ready) {
             onDeleted(documentType);
             setLocalPreview(null);
-            setError("Application is still being created. Please try the upload again.");
+            setError(
+              "Save applicant details in section 1 first, then upload the document again."
+            );
             return;
           }
         }
