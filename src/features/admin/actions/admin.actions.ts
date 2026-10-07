@@ -59,6 +59,13 @@ async function requireAdmin() {
   };
 }
 
+function staffUserError(error: z.ZodError): string {
+  const assignment = error.issues.find((issue) =>
+    issue.path.includes("assignedPayrollManagerId")
+  );
+  return assignment?.message ?? "Invalid user data";
+}
+
 function handleError(error: unknown): AdminActionResult {
   if (error instanceof AdminError) {
     return { success: false, error: error.message, code: error.code };
@@ -211,7 +218,7 @@ export async function createStaffUserAction(
   const ctx = await requireAdmin();
   const parsed = staffUserSchema.safeParse(data);
   if (!parsed.success) {
-    return { success: false, error: "Invalid user data" };
+    return { success: false, error: staffUserError(parsed.error) };
   }
   try {
     const user = await createStaffUser(ctx, parsed.data);
@@ -229,7 +236,7 @@ export async function updateStaffUserAction(
   const ctx = await requireAdmin();
   const parsed = updateStaffUserSchema.safeParse(data);
   if (!parsed.success) {
-    return { success: false, error: "Invalid user data" };
+    return { success: false, error: staffUserError(parsed.error) };
   }
   try {
     await updateStaffUser(ctx, id, parsed.data);

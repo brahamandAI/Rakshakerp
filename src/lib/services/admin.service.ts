@@ -384,6 +384,8 @@ const MANAGEABLE_ROLES: StaffRole[] = [
   UserRole.L2,
   UserRole.SCANNING,
   UserRole.ADMIN,
+  UserRole.PAYROLL_MANAGER,
+  UserRole.PAYROLL_EXECUTIVE,
 ];
 
 const staffUserPublicSelect = {
@@ -401,7 +403,76 @@ const staffUserPublicSelect = {
   lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
+  assignedPayrollManagerId: true,
+  assignedPayrollManager: {
+    select: { id: true, name: true },
+  },
 } as const;
+
+async function resolvePayrollExecutiveManager(
+  assignedPayrollManagerId: string | null | undefined,
+  executiveId?: string
+): Promise<string> {
+  const managerId = assignedPayrollManagerId?.trim();
+  if (!managerId) {
+    throw new AdminError(
+      "Select the Payroll Manager this executive is assigned to",
+      "VALIDATION"
+    );
+  }
+  if (executiveId && managerId === executiveId) {
+    throw new AdminError(
+      "A Payroll Executive cannot be assigned to themselves",
+      "VALIDATION"
+    );
+  }
+
+  const manager = await prisma.user.findUnique({
+    where: { id: managerId },
+    select: { id: true, role: true, isActive: true },
+  });
+  if (
+    !manager ||
+    manager.role !== UserRole.PAYROLL_MANAGER ||
+    !manager.isActive
+  ) {
+    throw new AdminError("Assigned Payroll Manager is not available", "VALIDATION");
+  }
+  return manager.id;
+}
+
+async function assertPayrollUserRemovable(user: {
+  id: string;
+  role: string;
+}) {
+  if (user.role === UserRole.PAYROLL_MANAGER) {
+    const executives = await prisma.user.count({
+      where: { assignedPayrollManagerId: user.id },
+    });
+    if (executives > 0) {
+      throw new AdminError(
+        "Reassign this Payroll Manager's executives before deleting the account",
+        "FORBIDDEN"
+      );
+    }
+  }
+
+  const attendance = await prisma.attendance.count({
+    where: {
+      OR: [
+        { uploadedById: user.id },
+        { payrollManagerId: user.id },
+        { payrollExecutiveId: user.id },
+      ],
+    },
+  });
+  if (attendance > 0) {
+    throw new AdminError(
+      "This user is part of attendance records and cannot be deleted",
+      "FORBIDDEN"
+    );
+  }
+}
 
 export async function listStaffUsers() {
   const rows = await prisma.user.findMany({
@@ -421,6 +492,7 @@ export async function createStaffUser(
     role: StaffRole;
     department?: string;
     phone?: string;
+    assignedPayrollManagerId?: string;
   }
 ) {
   if (!MANAGEABLE_ROLES.includes(data.role)) {
@@ -436,6 +508,11 @@ export async function createStaffUser(
     select: { id: true },
   });
 
+  const assignedPayrollManagerId =
+    data.role === UserRole.PAYROLL_EXECUTIVE
+      ? await resolvePayrollExecutiveManager(data.assignedPayrollManagerId)
+      : null;
+
   const now = new Date();
   const user = await prisma.user.create({
     data: {
@@ -448,6 +525,7 @@ export async function createStaffUser(
       phone: data.phone ?? null,
       isActive: true,
       createdBy: creator?.id ?? null,
+      assignedPayrollManagerId,
       failedLoginAttempts: 0,
       createdAt: now,
       updatedAt: now,
@@ -458,6 +536,9 @@ export async function createStaffUser(
   await audit(ctx, "CREATE", "USER", user.id, {
     email: data.email,
     role: data.role,
+    ...(assignedPayrollManagerId
+      ? { assignedPayrollManagerId }
+      : {}),
   });
   return withMongoId(user);
 }
@@ -472,6 +553,7 @@ export async function updateStaffUser(
     phone: string;
     isActive: boolean;
     password: string;
+    assignedPayrollManagerId: string | null;
   }>
 ) {
   if (id === ctx.userId && data.isActive === false) {
@@ -512,6 +594,22 @@ export async function updateStaffUser(
     }
   }
 
+  const nextRole = data.role ?? userToUpdate.role;
+  if (
+    userToUpdate.role === UserRole.PAYROLL_MANAGER &&
+    nextRole !== UserRole.PAYROLL_MANAGER
+  ) {
+    const executives = await prisma.user.count({
+      where: { assignedPayrollManagerId: userToUpdate.id },
+    });
+    if (executives > 0) {
+      throw new AdminError(
+        "Reassign this Payroll Manager's executives before changing the role",
+        "FORBIDDEN"
+      );
+    }
+  }
+
   const updateData: Prisma.UserUpdateInput = {
     updatedAt: new Date(),
   };
@@ -520,6 +618,25 @@ export async function updateStaffUser(
   if (data.department !== undefined) updateData.department = data.department;
   if (data.phone !== undefined) updateData.phone = data.phone;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
+  const assignmentTouched =
+    data.role !== undefined || data.assignedPayrollManagerId !== undefined;
+
+  if (nextRole === UserRole.PAYROLL_EXECUTIVE && assignmentTouched) {
+    const managerId = await resolvePayrollExecutiveManager(
+      data.assignedPayrollManagerId !== undefined
+        ? data.assignedPayrollManagerId
+        : userToUpdate.assignedPayrollManagerId,
+      userToUpdate.id
+    );
+    updateData.assignedPayrollManager = { connect: { id: managerId } };
+  } else if (
+    data.role !== undefined &&
+    data.role !== UserRole.PAYROLL_EXECUTIVE &&
+    userToUpdate.assignedPayrollManagerId
+  ) {
+    updateData.assignedPayrollManager = { disconnect: true };
+  }
   if (data.password) {
     updateData.passwordHash = await hashPassword(data.password);
     updateData.passwordChangedAt = new Date();
@@ -559,6 +676,8 @@ export async function deleteStaffUser(
   if (!MANAGEABLE_ROLES.includes(user.role as StaffRole)) {
     throw new AdminError("This user cannot be deleted here", "FORBIDDEN");
   }
+
+  await assertPayrollUserRemovable(user);
 
   if (user.role === UserRole.ADMIN) {
     const otherAdmins = await prisma.user.count({

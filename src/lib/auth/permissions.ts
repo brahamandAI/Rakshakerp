@@ -13,6 +13,8 @@ export function getRoleLabel(role: UserRole | StaffRole): string {
     [UserRole.SCANNING]: "Scanning",
     [UserRole.SUPPORT]: "Support",
     [UserRole.ADMIN]: "Super Admin",
+    [UserRole.PAYROLL_MANAGER]: "Payroll Manager",
+    [UserRole.PAYROLL_EXECUTIVE]: "Payroll Executive",
   };
   return labels[role] ?? role;
 }
@@ -23,6 +25,7 @@ export function canAccessRoute(role: StaffRole, pathname: string): boolean {
       "/dashboard/submitter",
       "/dashboard/submitter/registrations",
       "/dashboard/submitter/documents",
+      "/dashboard/submitter/attendance",
       "/dashboard/submitter/notifications",
       "/dashboard/submitter/profile",
     ],
@@ -64,6 +67,18 @@ export function canAccessRoute(role: StaffRole, pathname: string): boolean {
       "/dashboard/admin/documents",
       "/dashboard/admin/notifications",
       "/dashboard/admin/profile",
+    ],
+    [UserRole.PAYROLL_MANAGER]: [
+      "/dashboard/payroll-manager",
+      "/dashboard/payroll-manager/attendance",
+      "/dashboard/payroll-manager/notifications",
+      "/dashboard/payroll-manager/profile",
+    ],
+    [UserRole.PAYROLL_EXECUTIVE]: [
+      "/dashboard/payroll-executive",
+      "/dashboard/payroll-executive/attendance",
+      "/dashboard/payroll-executive/notifications",
+      "/dashboard/payroll-executive/profile",
     ],
     [UserRole.SUPPORT]: [
       "/dashboard/support",

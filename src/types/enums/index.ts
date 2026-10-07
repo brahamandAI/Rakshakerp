@@ -6,6 +6,8 @@ export enum UserRole {
   SCANNING = "SCANNING",
   SUPPORT = "SUPPORT",
   ADMIN = "ADMIN",
+  PAYROLL_MANAGER = "PAYROLL_MANAGER",
+  PAYROLL_EXECUTIVE = "PAYROLL_EXECUTIVE",
 }
 
 export enum EmployeeStatus {
@@ -30,6 +32,8 @@ export const STAFF_ROLES = [
   UserRole.SCANNING,
   UserRole.SUPPORT,
   UserRole.ADMIN,
+  UserRole.PAYROLL_MANAGER,
+  UserRole.PAYROLL_EXECUTIVE,
 ] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
 
@@ -40,6 +44,8 @@ export const ROLE_DASHBOARD_PATH: Record<StaffRole, string> = {
   [UserRole.SCANNING]: "/dashboard/scanning",
   [UserRole.SUPPORT]: "/dashboard/support",
   [UserRole.ADMIN]: "/dashboard/admin",
+  [UserRole.PAYROLL_MANAGER]: "/dashboard/payroll-manager",
+  [UserRole.PAYROLL_EXECUTIVE]: "/dashboard/payroll-executive",
 };
 
 export const ROLE_ROUTE_PREFIX: Record<StaffRole, string> = {
@@ -49,6 +55,8 @@ export const ROLE_ROUTE_PREFIX: Record<StaffRole, string> = {
   [UserRole.SCANNING]: "/dashboard/scanning",
   [UserRole.SUPPORT]: "/dashboard/support",
   [UserRole.ADMIN]: "/dashboard/admin",
+  [UserRole.PAYROLL_MANAGER]: "/dashboard/payroll-manager",
+  [UserRole.PAYROLL_EXECUTIVE]: "/dashboard/payroll-executive",
 };
 
 /** Routes accessible without authentication */

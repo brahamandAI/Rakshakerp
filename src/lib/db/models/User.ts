@@ -48,6 +48,8 @@ const UserSchema = new Schema<IUser>(
         UserRole.SCANNING,
         UserRole.SUPPORT,
         UserRole.ADMIN,
+        UserRole.PAYROLL_MANAGER,
+        UserRole.PAYROLL_EXECUTIVE,
       ],
       required: true,
     },

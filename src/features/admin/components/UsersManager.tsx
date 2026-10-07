@@ -20,6 +20,8 @@ const CREATABLE_ROLES = [
   UserRole.L2,
   UserRole.SCANNING,
   UserRole.ADMIN,
+  UserRole.PAYROLL_MANAGER,
+  UserRole.PAYROLL_EXECUTIVE,
 ] as const;
 
 type CreatableRole = (typeof CREATABLE_ROLES)[number];
@@ -34,11 +36,19 @@ export interface StaffUserRow {
   isActive: boolean;
   lastLoginAt?: string;
   createdAt: string;
+  assignedPayrollManagerId?: string;
+  assignedPayrollManagerName?: string;
+}
+
+interface PayrollManagerOption {
+  id: string;
+  name: string;
 }
 
 interface UsersManagerProps {
   users: StaffUserRow[];
   currentUserId: string;
+  payrollManagers: PayrollManagerOption[];
 }
 
 const actionBtnClass =
@@ -156,7 +166,11 @@ function UserActions({
   );
 }
 
-export function UsersManager({ users, currentUserId }: UsersManagerProps) {
+export function UsersManager({
+  users,
+  currentUserId,
+  payrollManagers,
+}: UsersManagerProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,6 +180,7 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
   const [role, setRole] = useState<CreatableRole>(UserRole.SUBMITTER);
   const [department, setDepartment] = useState("");
   const [phone, setPhone] = useState("");
+  const [assignedPayrollManagerId, setAssignedPayrollManagerId] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<StaffUserRow | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -176,7 +191,8 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
   function resetForm() {
     setName(""); setEmail(""); setPassword(""); setNewPassword("");
     setRole(UserRole.SUBMITTER);
-    setDepartment(""); setPhone(""); setEditingId(null); setShowForm(false);
+    setDepartment(""); setPhone(""); setAssignedPayrollManagerId("");
+    setEditingId(null); setShowForm(false);
   }
 
   function startEdit(user: StaffUserRow) {
@@ -186,6 +202,7 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
     setRole(user.role);
     setDepartment(user.department ?? "");
     setPhone(user.phone ?? "");
+    setAssignedPayrollManagerId(user.assignedPayrollManagerId ?? "");
     setPassword("");
     setNewPassword("");
     setShowForm(true);
@@ -198,12 +215,23 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
     e.preventDefault();
     startTransition(async () => {
       if (editingId) {
+        if (role === UserRole.PAYROLL_EXECUTIVE && !assignedPayrollManagerId) {
+          toast({
+            title: "Payroll Manager required",
+            description: "Select the Payroll Manager this executive is assigned to.",
+            variant: "destructive",
+          });
+          return;
+        }
         const result = await updateStaffUserAction(editingId, {
           name: name.trim(),
           role: editingSelf ? undefined : role,
           password: newPassword || undefined,
           department: department.trim(),
           phone: phone.trim(),
+          ...(role === UserRole.PAYROLL_EXECUTIVE
+            ? { assignedPayrollManagerId }
+            : {}),
         });
         if (result.success) {
           toast({ title: "Updated", description: "User updated successfully.", variant: "success" });
@@ -212,10 +240,21 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
           toast({ title: "Error", description: result.error, variant: "destructive" });
         }
       } else {
+        if (role === UserRole.PAYROLL_EXECUTIVE && !assignedPayrollManagerId) {
+          toast({
+            title: "Payroll Manager required",
+            description: "Select the Payroll Manager this executive is assigned to.",
+            variant: "destructive",
+          });
+          return;
+        }
         const result = await createStaffUserAction({
           name, email, password, role,
           department: department || undefined,
           phone: phone || undefined,
+          ...(role === UserRole.PAYROLL_EXECUTIVE
+            ? { assignedPayrollManagerId }
+            : {}),
         });
         if (result.success) {
           toast({ title: "Created", description: "Staff user created.", variant: "success" });
@@ -313,7 +352,13 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
               <select
                 className="flex h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3.5 text-sm disabled:cursor-not-allowed disabled:bg-[#F8FAFC] disabled:opacity-60"
                 value={role}
-                onChange={(e) => setRole(e.target.value as CreatableRole)}
+                onChange={(e) => {
+                  const nextRole = e.target.value as CreatableRole;
+                  setRole(nextRole);
+                  if (nextRole !== UserRole.PAYROLL_EXECUTIVE) {
+                    setAssignedPayrollManagerId("");
+                  }
+                }}
                 disabled={editingSelf}
               >
                 {CREATABLE_ROLES.map((r) => (
@@ -333,6 +378,29 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
                 placeholder="Leave blank to keep unchanged"
                 autoComplete="new-password"
               />
+            )}
+            {role === UserRole.PAYROLL_EXECUTIVE && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Assigned To</Label>
+                <select
+                  className="flex h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3.5 text-sm"
+                  value={assignedPayrollManagerId}
+                  onChange={(e) => setAssignedPayrollManagerId(e.target.value)}
+                  required
+                >
+                  <option value="">Select Payroll Manager</option>
+                  {payrollManagers.map((manager) => (
+                    <option key={manager.id} value={manager.id}>
+                      {manager.name}
+                    </option>
+                  ))}
+                </select>
+                {payrollManagers.length === 0 && (
+                  <p className="text-xs text-[#B45309]">
+                    Create a Payroll Manager before assigning a Payroll Executive.
+                  </p>
+                )}
+              </div>
             )}
             <div className="space-y-2"><Label>Department</Label><Input value={department} onChange={(e) => setDepartment(e.target.value)} /></div>
             <div className="space-y-2"><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
@@ -370,7 +438,14 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
                   )}
                 </td>
                 <td className="px-4 py-3 text-[#64748B]">{user.email}</td>
-                <td className="px-4 py-3">{getRoleLabel(user.role)}</td>
+                <td className="px-4 py-3">
+                  <div>{getRoleLabel(user.role)}</div>
+                  {user.assignedPayrollManagerName && (
+                    <div className="text-xs text-[#64748B]">
+                      Assigned to {user.assignedPayrollManagerName}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-[#64748B]">{formatDate(user.lastLoginAt)}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${user.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
@@ -412,6 +487,11 @@ export function UsersManager({ users, currentUserId }: UsersManagerProps) {
                   </p>
                   <p className="truncate text-xs text-[#64748B]">{user.email}</p>
                   <p className="mt-1 text-sm text-[#334155]">{getRoleLabel(user.role)}</p>
+                  {user.assignedPayrollManagerName && (
+                    <p className="text-xs text-[#64748B]">
+                      Assigned to {user.assignedPayrollManagerName}
+                    </p>
+                  )}
                 </div>
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${user.isActive ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-600"}`}>
                   {user.isActive ? "Active" : "Inactive"}

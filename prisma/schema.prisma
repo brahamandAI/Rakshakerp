@@ -26,11 +26,20 @@ model User {
   resetPasswordExpires DateTime?
   createdBy            String?
   lastLoginAt          DateTime?
+  /// Payroll Executive only: the Payroll Manager this user reports to
+  assignedPayrollManagerId String?
   createdAt            DateTime
   updatedAt            DateTime
 
   createdByUser User?  @relation("UserCreatedBy", fields: [createdBy], references: [id])
   createdUsers  User[] @relation("UserCreatedBy")
+
+  assignedPayrollManager    User?  @relation("PayrollExecutiveAssignment", fields: [assignedPayrollManagerId], references: [id], onDelete: Restrict)
+  assignedPayrollExecutives User[] @relation("PayrollExecutiveAssignment")
+
+  attendancesUploaded Attendance[] @relation("AttendanceUploadedBy")
+  attendancesManaged  Attendance[] @relation("AttendanceManagedBy")
+  attendancesAssigned Attendance[] @relation("AttendanceAssignedTo")
 
   approvalHistories ApprovalHistory[]
   auditLogs         AuditLog[]
@@ -42,6 +51,7 @@ model User {
   @@index([role, isActive])
   @@index([resetPasswordToken])
   @@index([createdBy])
+  @@index([assignedPayrollManagerId])
   @@map("users")
 }
 
@@ -267,6 +277,39 @@ model AuditLog {
   @@index([performedBy])
   @@index([createdAt])
   @@map("auditlogs")
+}
+
+// ---------------------------------------------------------------------------
+// Attendance — payroll file handoff (submitter → manager → executive)
+// ---------------------------------------------------------------------------
+model Attendance {
+  id                   String    @id
+  fileName             String
+  /// Private storage key. Never sent to the browser.
+  storageKey           String
+  fileType             String
+  mimeType             String
+  sizeBytes            Int
+  uploadedById         String
+  uploadedByName       String
+  payrollManagerId     String
+  payrollManagerName   String
+  payrollExecutiveId   String?
+  payrollExecutiveName String?
+  status               String
+  forwardedAt          DateTime?
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  uploadedBy       User  @relation("AttendanceUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+  payrollManager   User  @relation("AttendanceManagedBy", fields: [payrollManagerId], references: [id], onDelete: Restrict)
+  payrollExecutive User? @relation("AttendanceAssignedTo", fields: [payrollExecutiveId], references: [id], onDelete: Restrict)
+
+  @@index([uploadedById, createdAt])
+  @@index([payrollManagerId, createdAt])
+  @@index([payrollExecutiveId, createdAt])
+  @@index([status])
+  @@map("attendances")
 }
 
 // ---------------------------------------------------------------------------

@@ -64,6 +64,8 @@ export const STAFF_NOTIFICATIONS_PATH: Record<string, string> = {
   SCANNING: "/dashboard/scanning/notifications",
   SUPPORT: "/dashboard/support/notifications",
   ADMIN: "/dashboard/admin/notifications",
+  PAYROLL_MANAGER: "/dashboard/payroll-manager/notifications",
+  PAYROLL_EXECUTIVE: "/dashboard/payroll-executive/notifications",
 };
 
 export const EMPLOYEE_NOTIFICATIONS_PATH = "/application/notifications";

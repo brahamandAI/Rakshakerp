@@ -40,6 +40,7 @@ const PAGE_TITLES: Record<string, string> = {
   documents: "Documents",
   notifications: "Notifications",
   profile: "Profile",
+  attendance: "Attendance",
   users: "Users",
   edit: "Edit",
   generate: "Generate ID Card",

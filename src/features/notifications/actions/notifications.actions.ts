@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireStaffAuth } from "@/lib/auth/guards";
 import { getEmployeeSession } from "@/lib/auth/employee-session";
-import { StaffRole, UserRole } from "@/types/enums";
+import { ROLE_DASHBOARD_PATH, StaffRole, UserRole } from "@/types/enums";
 import {
   markStaffNotificationRead,
   markAllStaffNotificationsRead,
@@ -13,8 +13,9 @@ import {
 import { STAFF_NOTIFICATIONS_PATH, EMPLOYEE_NOTIFICATIONS_PATH } from "@/features/notifications/constants";
 
 function revalidateStaffNotifications(role: StaffRole) {
-  revalidatePath(STAFF_NOTIFICATIONS_PATH[role]);
-  revalidatePath(`/dashboard/${role.toLowerCase()}`);
+  const notificationsPath = STAFF_NOTIFICATIONS_PATH[role];
+  if (notificationsPath) revalidatePath(notificationsPath);
+  revalidatePath(ROLE_DASHBOARD_PATH[role]);
 }
 
 export async function markStaffNotificationReadAction(notificationId: string) {

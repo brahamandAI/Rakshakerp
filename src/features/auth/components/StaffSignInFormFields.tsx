@@ -25,6 +25,8 @@ function emailPlaceholder(role: string): string {
   if (role === UserRole.L2) return "l2@rakshaksecuritas.com";
   if (role === UserRole.SUPPORT) return "support@rakshaksecuritas.com";
   if (role === UserRole.ADMIN) return "admin@rakshaksecuritas.com";
+  if (role === UserRole.PAYROLL_MANAGER) return "payroll.manager@rakshaksecuritas.com";
+  if (role === UserRole.PAYROLL_EXECUTIVE) return "payroll.executive@rakshaksecuritas.com";
   return "you@rakshaksecuritas.com";
 }
 

@@ -21,9 +21,11 @@ import {
   Crown,
   Undo2,
   ScanLine,
+  ClipboardCheck,
+  FileUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { StaffRole, UserRole } from "@/types/enums";
+import { ROLE_DASHBOARD_PATH, StaffRole, UserRole } from "@/types/enums";
 import { getRoleLabel } from "@/lib/auth/permissions";
 import { SidebarNotificationBadge } from "@/features/notifications/components/NotificationBell";
 import { BrandLogo } from "@/components/brand/BrandLogo";
@@ -85,6 +87,11 @@ const NAV_ITEMS: Record<StaffRole, NavItem[] | NavSection[]> = {
       icon: XCircle,
     },
     { label: "Documents", href: "/dashboard/submitter/documents", icon: FolderOpen },
+    {
+      label: "Attendance Upload",
+      href: "/dashboard/submitter/attendance",
+      icon: FileUp,
+    },
     { label: "Notifications", href: "/dashboard/submitter/notifications", icon: Bell },
   ],
   [UserRole.L1]: [
@@ -123,6 +130,32 @@ const NAV_ITEMS: Record<StaffRole, NavItem[] | NavSection[]> = {
   ],
   [UserRole.SUPPORT]: SUPPORT_NAV,
   [UserRole.ADMIN]: ADMIN_NAV,
+  [UserRole.PAYROLL_MANAGER]: [
+    { label: "Dashboard", href: "/dashboard/payroll-manager", icon: LayoutDashboard },
+    {
+      label: "Attendance",
+      href: "/dashboard/payroll-manager/attendance",
+      icon: ClipboardCheck,
+    },
+    {
+      label: "Notifications",
+      href: "/dashboard/payroll-manager/notifications",
+      icon: Bell,
+    },
+  ],
+  [UserRole.PAYROLL_EXECUTIVE]: [
+    { label: "Dashboard", href: "/dashboard/payroll-executive", icon: LayoutDashboard },
+    {
+      label: "Attendance",
+      href: "/dashboard/payroll-executive/attendance",
+      icon: ClipboardCheck,
+    },
+    {
+      label: "Notifications",
+      href: "/dashboard/payroll-executive/notifications",
+      icon: Bell,
+    },
+  ],
 };
 
 const SECTIONED_ROLES = new Set<StaffRole>([UserRole.SUPPORT, UserRole.ADMIN]);
@@ -158,6 +191,16 @@ const ROLE_BADGE: Record<StaffRole, { icon: LucideIcon; className: string }> = {
     className:
       "border-violet-400/30 bg-gradient-to-r from-violet-500/25 to-fuchsia-600/15 text-violet-100",
   },
+  [UserRole.PAYROLL_MANAGER]: {
+    icon: ClipboardCheck,
+    className:
+      "border-amber-400/35 bg-gradient-to-r from-amber-500/30 to-[#D4AF37]/20 text-amber-100",
+  },
+  [UserRole.PAYROLL_EXECUTIVE]: {
+    icon: ClipboardCheck,
+    className:
+      "border-teal-400/30 bg-gradient-to-r from-teal-500/25 to-cyan-600/20 text-teal-100",
+  },
 };
 
 interface DashboardSidebarProps {
@@ -167,15 +210,7 @@ interface DashboardSidebarProps {
 
 function isNavActive(pathname: string, href: string, role: StaffRole): boolean {
   const hrefPath = href.split("?")[0];
-  const dashboardRoots: Record<StaffRole, string> = {
-    [UserRole.SUBMITTER]: "/dashboard/submitter",
-    [UserRole.L1]: "/dashboard/l1",
-    [UserRole.L2]: "/dashboard/l2",
-    [UserRole.SCANNING]: "/dashboard/scanning",
-    [UserRole.SUPPORT]: "/dashboard/support",
-    [UserRole.ADMIN]: "/dashboard/admin",
-  };
-  const root = dashboardRoots[role];
+  const root = ROLE_DASHBOARD_PATH[role];
   if (hrefPath === root) return pathname === root;
   if (
     hrefPath.endsWith("/registrations") &&
@@ -195,18 +230,7 @@ export function DashboardSidebar({ role, unreadCountPromise }: DashboardSidebarP
     ? (navConfig as NavSection[])
     : [{ title: "Navigation", items: navConfig as NavItem[] }];
 
-  const dashboardHome =
-    role === UserRole.SUBMITTER
-      ? "/dashboard/submitter"
-      : role === UserRole.L1
-        ? "/dashboard/l1"
-        : role === UserRole.L2
-          ? "/dashboard/l2"
-          : role === UserRole.SCANNING
-            ? "/dashboard/scanning"
-            : role === UserRole.ADMIN
-              ? "/dashboard/admin"
-              : "/dashboard/support";
+  const dashboardHome = ROLE_DASHBOARD_PATH[role];
 
   const roleBadge = ROLE_BADGE[role];
   const RoleIcon = roleBadge.icon;

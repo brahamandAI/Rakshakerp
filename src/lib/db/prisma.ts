@@ -6,8 +6,12 @@ const globalForPrisma = globalThis as unknown as {
   prismaRepairStarted?: boolean;
 };
 
+function databaseUrl(): string | undefined {
+  return process.env.DATABASE_URL?.trim() || process.env.DATABASE_URI?.trim() || undefined;
+}
+
 function createPrismaClient() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = databaseUrl();
 
   if (!connectionString) {
     throw new Error("DATABASE_URL is not configured");

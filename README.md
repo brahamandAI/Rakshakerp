@@ -78,4 +78,5 @@ OTP is printed to the server console in development when email is not configured
 
 
 
-pm2 restart employee-onboarding-portal
+adminrakskakerp@gmail.com
+AdmIN@123

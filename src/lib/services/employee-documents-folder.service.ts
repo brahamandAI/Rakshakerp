@@ -358,7 +358,11 @@ export async function listEmployeeDocumentFolders(params: {
   masterFolder: string;
   folders: MasterFolderListItem[];
 }> {
-  if (params.role === UserRole.L1) {
+  if (
+    params.role === UserRole.L1 ||
+    params.role === UserRole.PAYROLL_MANAGER ||
+    params.role === UserRole.PAYROLL_EXECUTIVE
+  ) {
     return { masterFolder: EMPLOYEE_DOCUMENTS_MASTER_FOLDER, folders: [] };
   }
 

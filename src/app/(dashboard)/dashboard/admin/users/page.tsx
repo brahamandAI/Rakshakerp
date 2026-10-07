@@ -1,6 +1,7 @@
 import { requireStaffAuth } from "@/lib/auth/guards";
 import { UserRole } from "@/types/enums";
 import { listStaffUsers } from "@/lib/services/admin.service";
+import { listActivePayrollManagers } from "@/lib/services/attendance.service";
 import { AdminPageHeader } from "@/features/admin/components/AdminPageHeader";
 import { UsersManager } from "@/features/admin/components/UsersManager";
 
@@ -12,11 +13,16 @@ const MANAGEABLE = new Set([
   UserRole.L2,
   UserRole.SCANNING,
   UserRole.ADMIN,
+  UserRole.PAYROLL_MANAGER,
+  UserRole.PAYROLL_EXECUTIVE,
 ]);
 
 export default async function AdminUsersPage() {
   const { user } = await requireStaffAuth(UserRole.ADMIN);
-  const raw = await listStaffUsers();
+  const [raw, payrollManagers] = await Promise.all([
+    listStaffUsers(),
+    listActivePayrollManagers(),
+  ]);
 
   const users = raw
     .filter((u) => MANAGEABLE.has(u.role as UserRole))
@@ -29,9 +35,13 @@ export default async function AdminUsersPage() {
         | UserRole.L1
         | UserRole.L2
         | UserRole.SCANNING
-        | UserRole.ADMIN,
+        | UserRole.ADMIN
+        | UserRole.PAYROLL_MANAGER
+        | UserRole.PAYROLL_EXECUTIVE,
       department: u.department ?? undefined,
       phone: u.phone ?? undefined,
+      assignedPayrollManagerId: u.assignedPayrollManagerId ?? undefined,
+      assignedPayrollManagerName: u.assignedPayrollManager?.name,
       isActive: u.isActive,
       lastLoginAt: u.lastLoginAt?.toISOString(),
       createdAt: u.createdAt.toISOString(),
@@ -41,9 +51,13 @@ export default async function AdminUsersPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="User Management"
-        description="Create and manage Submitter, L1, L2, Scanning, and Super Admin accounts."
+        description="Create and manage Submitter, L1, L2, Scanning, Payroll, and Super Admin accounts."
       />
-      <UsersManager users={users} currentUserId={user.id} />
+      <UsersManager
+        users={users}
+        currentUserId={user.id}
+        payrollManagers={payrollManagers}
+      />
     </div>
   );
 }

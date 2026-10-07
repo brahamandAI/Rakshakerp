@@ -20,7 +20,7 @@ export function getRequiredEnvChecks(): EnvCheck[] {
       key: "DATABASE_URL",
       label: "PostgreSQL connection",
       required: true,
-      configured: isSet(process.env.DATABASE_URL),
+      configured: isSet(process.env.DATABASE_URL) || isSet(process.env.DATABASE_URI),
     },
     {
       key: "MONGODB_URI",

@@ -7,10 +7,10 @@
     "clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\"",
     "prebuild": "npm run clean",
     "build": "node scripts/build.mjs",
-    "start": "node scripts/start-prod.js",
+    "start": "next start",
     "lint": "next lint",
+    "db:generate": "prisma generate --config prisma7.config.ts",
     "db:check": "tsx --env-file=.env scripts/check-db.ts",
-    "db:ip": "tsx scripts/show-atlas-ip.ts",
     "seed": "tsx --env-file=.env scripts/seed/users.ts"
   },
   "dependencies": {
@@ -32,6 +32,7 @@
     "multer": "^2.2.0",
     "next": "^15.1.0",
     "next-auth": "^5.0.0-beta.25",
+    "next-cloudinary": "^6.19.3",
     "pdfkit": "^0.19.1",
     "pg": "^8.23.0",
     "prisma": "^7.10.0",
@@ -52,6 +53,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^18.0.6",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
     "postcss": "^8",
@@ -60,8 +62,3 @@
     "typescript": "^5"
   }
 }
-
-
-
-
-

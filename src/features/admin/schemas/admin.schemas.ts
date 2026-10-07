@@ -45,37 +45,55 @@ export const siteLocationSchema = z.object({
   contactPhone: z.string().optional(),
 });
 
-export const staffUserSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  password: z.string().min(8),
-  role: z.enum([
-    UserRole.SUBMITTER,
-    UserRole.L1,
-    UserRole.L2,
-    UserRole.SCANNING,
-    UserRole.ADMIN,
-  ]),
-  department: z.string().optional(),
-  phone: z.string().optional(),
-});
+const creatableStaffRoles = [
+  UserRole.SUBMITTER,
+  UserRole.L1,
+  UserRole.L2,
+  UserRole.SCANNING,
+  UserRole.ADMIN,
+  UserRole.PAYROLL_MANAGER,
+  UserRole.PAYROLL_EXECUTIVE,
+] as const;
 
-export const updateStaffUserSchema = z.object({
-  name: z.string().min(2).optional(),
-  role: z
-    .enum([
-      UserRole.SUBMITTER,
-      UserRole.L1,
-      UserRole.L2,
-      UserRole.SCANNING,
-      UserRole.ADMIN,
-    ])
-    .optional(),
-  password: z.string().min(8).optional(),
-  department: z.string().optional(),
-  phone: z.string().optional(),
-  isActive: z.boolean().optional(),
-});
+function requirePayrollManagerAssignment(
+  value: { role?: string; assignedPayrollManagerId?: string },
+  ctx: z.RefinementCtx
+) {
+  if (
+    value.role === UserRole.PAYROLL_EXECUTIVE &&
+    !value.assignedPayrollManagerId?.trim()
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["assignedPayrollManagerId"],
+      message: "Select the Payroll Manager this executive is assigned to",
+    });
+  }
+}
+
+export const staffUserSchema = z
+  .object({
+    name: z.string().min(2),
+    email: z.string().email(),
+    password: z.string().min(8),
+    role: z.enum(creatableStaffRoles),
+    department: z.string().optional(),
+    phone: z.string().optional(),
+    assignedPayrollManagerId: z.string().optional(),
+  })
+  .superRefine(requirePayrollManagerAssignment);
+
+export const updateStaffUserSchema = z
+  .object({
+    name: z.string().min(2).optional(),
+    role: z.enum(creatableStaffRoles).optional(),
+    password: z.string().min(8).optional(),
+    department: z.string().optional(),
+    phone: z.string().optional(),
+    isActive: z.boolean().optional(),
+    assignedPayrollManagerId: z.string().optional(),
+  })
+  .superRefine(requirePayrollManagerAssignment);
 
 export const profileUpdateSchema = z.object({
   name: z.string().min(2).optional(),
